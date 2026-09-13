@@ -486,7 +486,7 @@ div.prodockit-figure-caption > p:first-child {
     page-break-after: avoid !important;
     break-after: avoid-page !important;
 }
-table th { background-color: rgba(0, 0, 0, 0.05) !important; font-weight: bold !important; text-align: center !important; }
+table th { background-color: rgba(0, 0, 0, 0.05) !important; font-weight: bold !important; }
 table th.prodockit-table-cell-shaded,
 table td.prodockit-table-cell-shaded {
     background-color: rgba(0, 0, 0, var(--prodockit-table-cell-shade)) !important;
@@ -513,7 +513,9 @@ table th, table td {
     font-size: 10pt !important;
     vertical-align: top !important;
 }
-table td { text-align: left !important; }
+/* Match Zensical's left-aligned default without overriding the inline
+   alignment emitted for Markdown columns or author-selected cell styles. */
+table th, table td { text-align: left; }
 table th.prodockit-table-cell-valign-top,
 table td.prodockit-table-cell-valign-top {
     vertical-align: top !important;
