@@ -119,6 +119,50 @@ def test_website_and_pdf_default_table_cells_to_top_alignment() -> None:
     assert "vertical-align: top !important;" in pdf
 
 
+@pytest.mark.parametrize("captioned", [False, True])
+def test_pdf_table_horizontal_alignment_respects_defaults_and_author_choices(
+    captioned: bool,
+) -> None:
+    """Headers match the website, even in a centred caption wrapper (#825)."""
+    weasyprint = pytest.importorskip("weasyprint")
+    from prodockit.pdf.css import build_css
+
+    html = _convert(
+        "| Default | Left | Centre | Right |\n"
+        "|---|:---|:---:|---:|\n"
+        "| a | b | c | d |\n"
+    )
+    # Exercise merged, multi-row headers as well as Markdown column alignment.
+    html += (
+        '<table><thead><tr><th colspan="2">Subject Area</th></tr>'
+        '<tr><th>Topic</th><th style="text-align: right">AD ID</th></tr>'
+        '</thead><tbody><tr><td>Security</td><td>1</td></tr></tbody></table>'
+    )
+    if captioned:
+        html = f'<figure class="prodockit-table-caption"><figcaption>Caption</figcaption>{html}</figure>'
+    css = build_css(**_css_defaults())
+    page = weasyprint.HTML(
+        string=f"<html><head><style>{css}</style></head><body>{html}</body></html>"
+    ).render().pages[0]
+    alignments: list[str] = []
+    seen: set[int] = set()
+
+    def walk(box: object) -> None:
+        element = getattr(box, "element", None)
+        if getattr(box, "element_tag", None) in {"th", "td"} and id(element) not in seen:
+            seen.add(id(element))
+            alignments.append(getattr(box, "style", {})["text_align_all"])
+        for child in getattr(box, "children", []):
+            walk(child)
+
+    walk(page._page_box)
+    assert alignments == [
+        "left", "left", "center", "right",  # Markdown headers
+        "left", "left", "center", "right",  # Markdown body
+        "left", "left", "right", "left", "left",  # merged table
+    ]
+
+
 def test_pdf_merged_cells_render_with_every_boundary_visible() -> None:
     """Check the laid-out grid, not only its CSS: collapsed borders share
     their width between adjacent cells, including rowspan/colspan edges."""
