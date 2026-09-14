@@ -1440,7 +1440,7 @@ def _display_path(value: str | Path, root: Path) -> str:
 
 def _sanitise_text(value: str, root: Path) -> str:
     """Make subprocess and metadata evidence safe to attach to support."""
-    text = re.sub(r"(https?://)[^/@\s]+@", r"\1", value)
+    text = re.sub(r"(https?://)[^/@\s]+@", r"\1", value, flags=re.IGNORECASE)
     replacements = ((str(root.resolve()), "."), (str(Path.home().resolve()), "~"))
     for original, replacement in replacements:
         if len(original) > 1:

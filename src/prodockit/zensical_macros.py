@@ -117,7 +117,7 @@ def _get_repo_url() -> str:
     if ssh_match:
         host, path = ssh_match.group(1), ssh_match.group(2)
         return f"https://{host}/{path}"
-    if remote_url.startswith(("http://", "https://")):
+    if remote_url.lower().startswith(("http://", "https://")):
         remote_url = re.sub(r"\.git$", "", remote_url)
         parsed = urlparse(remote_url)
         if parsed.username or parsed.password:
