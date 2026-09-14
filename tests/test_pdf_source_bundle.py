@@ -140,6 +140,21 @@ def test_discover_source_files_includes_untracked_but_not_ignored_files(tmp_path
     assert discover_source_files(str(tmp_path)) == ["new_file.py"]
 
 
+def test_discover_source_files_does_not_follow_a_tracked_symlink(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    outside = tmp_path.parent / "outside-note.md"
+    outside.write_text("HARMLESS_OUTSIDE_REPOSITORY_CANARY\n", encoding="utf-8")
+    linked = tmp_path / "external-linked.md"
+    try:
+        linked.symlink_to(outside)
+    except OSError:
+        pytest.skip("creating symlinks is not permitted on this platform")
+    (tmp_path / "kept.md").write_text("kept\n", encoding="utf-8")
+    subprocess.run(["git", "add", "external-linked.md", "kept.md"], cwd=tmp_path, check=True)
+
+    assert discover_source_files(str(tmp_path)) == ["kept.md"]
+
+
 def test_discover_source_files_raises_for_a_non_git_directory(tmp_path: Path) -> None:
     with pytest.raises(SourceBundleError):
         discover_source_files(str(tmp_path))
@@ -371,6 +386,35 @@ def test_explicit_files_list_overrides_default_discovery(
     # named in `files` - must not appear just because discover_source_files()
     # would otherwise have found it.
     assert "src/b.py" not in html
+
+
+def test_explicit_files_list_cannot_follow_an_external_symlink(
+    tmp_path: Path, fake_weasyprint_on_path
+) -> None:
+    outside = tmp_path / "outside-note.md"
+    outside.write_text("HARMLESS_OUTSIDE_REPOSITORY_CANARY\n", encoding="utf-8")
+    repo = tmp_path / "repo"
+    (repo / "docs").mkdir(parents=True)
+    linked = repo / "docs" / "external-linked.md"
+    try:
+        linked.symlink_to(outside)
+    except OSError:
+        pytest.skip("creating symlinks is not permitted on this platform")
+    fake_weasyprint_on_path('echo "%PDF-1.4 stub" > "$2"')
+    work_dir = tmp_path / "work"
+
+    count = build_source_bundle(
+        str(tmp_path / "out.pdf"),
+        root=str(repo),
+        files=["docs/external-linked.md"],
+        work_dir=str(work_dir),
+        keep_work_dir=True,
+    )
+
+    assert count == 0
+    html = (work_dir / "_prodockit_source_bundle.html").read_text(encoding="utf-8")
+    assert "external-linked.md" not in html
+    assert "HARMLESS_OUTSIDE_REPOSITORY_CANARY" not in html
 
 
 def test_builds_the_pdf_to_the_given_output_path(tmp_path: Path, fake_weasyprint_on_path) -> None:

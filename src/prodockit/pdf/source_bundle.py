@@ -107,6 +107,34 @@ def _is_excluded(rel_path: str) -> bool:
     )
 
 
+def _is_regular_source_file(root: Path, rel_path: str) -> bool:
+    """Return whether ``rel_path`` is a regular file contained by ``root``.
+
+    Source bundles are shared outside the machine that builds them. Never
+    follow a symlink while collecting their inputs: a tracked link can point
+    at an unrelated local file outside the repository and make its contents
+    look as though they came from the project. Checking every path component
+    also protects callers that supply ``files`` directly rather than using
+    repository discovery.
+    """
+    relative = Path(rel_path)
+    if relative.is_absolute():
+        return False
+    candidate = root / relative
+    try:
+        resolved = candidate.resolve(strict=True)
+    except (OSError, RuntimeError):
+        return False
+    if not resolved.is_relative_to(root) or not resolved.is_file():
+        return False
+    for component in (candidate, *candidate.parents):
+        if component == root:
+            break
+        if component.is_symlink():
+            return False
+    return True
+
+
 def discover_source_files(root: str = ".") -> list[str]:
     """Returns every file under `root` that `.gitignore` doesn't exclude,
     as `root`-relative paths sorted alphabetically - both already-tracked
@@ -143,7 +171,10 @@ def discover_source_files(root: str = ".") -> list[str]:
             stderr=result.stderr,
         )
     all_files = sorted(line for line in result.stdout.splitlines() if line)
-    return [f for f in all_files if not _is_excluded(f)]
+    base = Path(root).resolve()
+    return [
+        f for f in all_files if not _is_excluded(f) and _is_regular_source_file(base, f)
+    ]
 
 
 def _git_relative_path(root: str, path: str) -> str:
@@ -400,7 +431,12 @@ def build_source_bundle(
     )
 
     candidate_files = files if files is not None else discover_source_files(root)
-    text_files = [f for f in candidate_files if is_probably_text(os.path.join(root, f))]
+    base = Path(root).resolve()
+    text_files = [
+        f
+        for f in candidate_files
+        if _is_regular_source_file(base, f) and is_probably_text(str(base / f))
+    ]
 
     use_temp_dir = work_dir is None
     resolved_work_dir: str = (
@@ -417,8 +453,10 @@ def build_source_bundle(
 
         body_parts: list[str] = []
         for rel_path in text_files:
+            if not _is_regular_source_file(base, rel_path):
+                continue
             try:
-                with open(os.path.join(root, rel_path), encoding="utf-8") as f:
+                with open(base / rel_path, encoding="utf-8") as f:
                     content = f.read()
             except (OSError, UnicodeDecodeError):
                 # is_probably_text() only sniffs the first 8 KiB - a file
