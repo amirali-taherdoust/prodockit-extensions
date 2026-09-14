@@ -375,7 +375,7 @@ def source_label(root: str) -> str:
         url = ""
     if not url:
         return os.path.abspath(root)
-    if "@" in url and url.startswith(("http://", "https://")):
+    if "@" in url and url.lower().startswith(("http://", "https://")):
         # https://token@host/ns/repo.git - a token in a submitted PDF is
         # the one thing here that must not happen.
         scheme, _, rest = url.partition("://")

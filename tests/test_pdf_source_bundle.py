@@ -652,7 +652,8 @@ def test_a_directory_with_no_remote_still_says_where_it_came_from(
     assert source_bundle.source_label(str(tmp_path)) == str(tmp_path)
 
 
-def test_a_token_in_the_remote_never_reaches_the_footer(monkeypatch) -> None:
+@pytest.mark.parametrize("scheme", ["http", "https", "HTTP", "HTTPS", "HtTpS"])
+def test_a_token_in_the_remote_never_reaches_the_footer(monkeypatch, scheme: str) -> None:
     """A bundle is submitted, printed and emailed. A credential embedded
     in a remote URL is the one thing here that must not travel with it."""
     from prodockit.pdf import source_bundle
@@ -660,10 +661,11 @@ def test_a_token_in_the_remote_never_reaches_the_footer(monkeypatch) -> None:
     monkeypatch.setattr(
         source_bundle,
         "get_remote_url",
-        lambda **kw: "https://az1234:glpat-SECRETTOKEN@gitlab.surrey.ac.uk/az1234/report.git",
+        lambda **kw: f"{scheme}://az1234:glpat-SECRETTOKEN@"
+        "gitlab.surrey.ac.uk/az1234/report.git",
     )
 
     label = source_bundle.source_label(".")
     assert "glpat-SECRETTOKEN" not in label
     assert "az1234:" not in label
-    assert label == "https://gitlab.surrey.ac.uk/az1234/report"
+    assert label == f"{scheme}://gitlab.surrey.ac.uk/az1234/report"

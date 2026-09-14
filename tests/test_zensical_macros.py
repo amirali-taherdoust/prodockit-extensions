@@ -133,13 +133,20 @@ def test_get_repo_url_converts_ssh_syntax_to_https(monkeypatch: pytest.MonkeyPat
     assert zensical_macros._get_repo_url() == "https://github.com/buckwem/zendoc-template"
 
 
-def test_get_repo_url_strips_embedded_ci_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("scheme", ["http", "https", "HTTP", "HTTPS", "HtTpS"])
+def test_get_repo_url_strips_embedded_ci_credentials(
+    monkeypatch: pytest.MonkeyPatch, scheme: str
+) -> None:
     monkeypatch.setattr(
         zensical_macros.subprocess,
         "check_output",
-        lambda *a, **k: b"https://gitlab-ci-token:abc123@gitlab.example.com/group/project.git\n",
+        lambda *a, **k: (
+            f"{scheme}://gitlab-ci-token:abc123@gitlab.example.com/group/project.git\n".encode()
+        ),
     )
-    assert zensical_macros._get_repo_url() == "https://gitlab.example.com/group/project"
+    assert zensical_macros._get_repo_url() == (
+        f"{scheme.lower()}://gitlab.example.com/group/project"
+    )
 
 
 def test_get_release_returns_the_latest_tag(monkeypatch: pytest.MonkeyPatch) -> None:

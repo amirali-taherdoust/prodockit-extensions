@@ -113,11 +113,14 @@ def test_command_location_accepts_a_pipx_style_symlink(tmp_path: Path) -> None:
     assert diagnostics.command_in_environment(str(shim), str(prefix), str(prefix / "bin"))
 
 
-def test_support_evidence_hides_home_paths_and_remote_credentials(tmp_path: Path) -> None:
-    evidence = f"{Path.home()}/Library https://writer:secret@example.test/project"
+@pytest.mark.parametrize("scheme", ["http", "https", "HTTP", "HTTPS", "HtTpS"])
+def test_support_evidence_hides_home_paths_and_remote_credentials(
+    tmp_path: Path, scheme: str
+) -> None:
+    evidence = f"{Path.home()}/Library {scheme}://writer:secret@example.test/project"
 
     assert diagnostics._sanitise_text(evidence, tmp_path) == (
-        "~/Library https://example.test/project"
+        f"~/Library {scheme}://example.test/project"
     )
 
 
