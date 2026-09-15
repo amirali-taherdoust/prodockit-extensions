@@ -335,6 +335,27 @@ def test_source_bundle_command_builds_into_docs_dir(
     assert not (tmp_path / "source_bundle.pdf").exists()
 
 
+def test_source_bundle_command_rejects_a_non_pdf_output_without_overwriting_config(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write_project(tmp_path)
+    config = tmp_path / "zensical.toml"
+    config.write_text(
+        config.read_text(encoding="utf-8")
+        + '\n[project.extra]\npdf_source_bundle_output = "zensical.toml"\n',
+        encoding="utf-8",
+    )
+    original = config.read_bytes()
+    monkeypatch.chdir(tmp_path)
+
+    result = CliRunner().invoke(main, ["source-bundle"])
+
+    assert result.exit_code == 1
+    assert "pdf_source_bundle_output must name a .pdf file" in result.output
+    assert "Traceback" not in result.output
+    assert config.read_bytes() == original
+
+
 def test_source_bundle_command_reports_a_source_bundle_error_instead_of_crashing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

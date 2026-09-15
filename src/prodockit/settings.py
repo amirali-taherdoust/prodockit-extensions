@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 INDEX_INCLUDE_DEFAULT = False
@@ -72,6 +73,12 @@ class ExtraSetting:
             expected = "a string"
         if not valid:
             raise SettingError(f"project.extra.{self.key} must be {expected}")
+        if (
+            self.key in {"pdf_output", "pdf_source_bundle_output"}
+            and value
+            and Path(str(value)).suffix.lower() != ".pdf"
+        ):
+            raise SettingError(f"project.extra.{self.key} must name a .pdf file")
 
 
 EXTRA_SETTINGS = (

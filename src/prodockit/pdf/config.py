@@ -713,6 +713,7 @@ def build_source_bundle_from_zensical_config(config_path: str = "zensical.toml")
     project_config = load_project_config(config_path)
     config = project_config.project
     extra = project_config.extra
+    validate_extra_settings(extra)
     docs_dir = str(config.get("docs_dir") or "docs")
     root = str(project_config.root)
 
