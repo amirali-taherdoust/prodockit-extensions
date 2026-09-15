@@ -110,6 +110,39 @@ class ProjectConfig:
 class _ConfigLoader(yaml.SafeLoader):  # type: ignore[misc, unused-ignore]
     """Read common MkDocs callable tags as names without importing them."""
 
+    def construct_mapping(
+        self, node: yaml.MappingNode, deep: bool = False
+    ) -> dict[Any, Any]:
+        """Reject repeated explicit keys before SafeLoader overwrites them.
+
+        YAML merge keys are deliberately excluded from this first pass: an
+        explicit key is allowed to override a value inherited through ``<<``.
+        The superclass still performs the normal safe merge construction.
+        """
+        seen: set[Any] = set()
+        for key_node, _value_node in node.value:
+            if key_node.tag == "tag:yaml.org,2002:merge":
+                continue
+            key = self.construct_object(key_node, deep=deep)
+            try:
+                duplicate = key in seen
+            except TypeError:
+                # Let SafeLoader produce its standard error for an unhashable
+                # mapping key rather than replacing it with a duplicate error.
+                continue
+            if duplicate:
+                line = key_node.start_mark.line + 1
+                column = key_node.start_mark.column + 1
+                raise yaml.constructor.ConstructorError(
+                    "while constructing a mapping",
+                    node.start_mark,
+                    f"duplicate key {key!r} at line {line}, column {column}; "
+                    "its earlier value would be overwritten",
+                    key_node.start_mark,
+                )
+            seen.add(key)
+        return super().construct_mapping(node, deep=deep)
+
 
 def _python_name(_loader: _ConfigLoader, suffix: str, _node: yaml.Node) -> str:
     return suffix

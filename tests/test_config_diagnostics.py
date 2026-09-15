@@ -285,6 +285,21 @@ def test_check_rejects_invalid_text_extension_option_types(
     assert "Traceback" not in result.output
 
 
+def test_check_rejects_duplicate_yaml_mapping_keys(tmp_path: Path) -> None:
+    path = tmp_path / "zensical.yml"
+    path.write_text(
+        "site_name: First title\nsite_name: Second title\ndocs_dir: docs\n",
+        encoding="utf-8",
+    )
+
+    result = _run(path, check=True)
+
+    assert result.exit_code == 1
+    assert "duplicate key 'site_name'" in result.output
+    assert "line 2" in result.output
+    assert "Traceback" not in result.output
+
+
 def test_check_rejects_invalid_index_value_types(tmp_path: Path) -> None:
     path = _config(
         tmp_path,

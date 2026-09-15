@@ -1348,6 +1348,22 @@ def test_diag_json_is_stable_and_failures_set_the_exit_status(
     assert payload["checks"][0]["repair"]["disposition"] == "ambiguous"
 
 
+def test_configuration_diagnostic_rejects_duplicate_yaml_mapping_keys(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "zensical.yml"
+    path.write_text(
+        "site_name: First title\nsite_name: Second title\ndocs_dir: docs\n",
+        encoding="utf-8",
+    )
+
+    config, check = diagnostics._configuration_check(path)
+
+    assert config is None
+    assert check.status == "fail"
+    assert any("duplicate key 'site_name'" in detail for detail in check.details)
+
+
 def test_every_diagnostic_has_one_registered_repair_disposition() -> None:
     assert set(diagnostics.REPAIR_REGISTRY) == diagnostics.DIAGNOSTIC_IDS
     with pytest.raises(ValueError, match="no registered repair disposition"):
