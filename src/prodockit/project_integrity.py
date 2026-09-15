@@ -424,6 +424,16 @@ def inspect_project(config: ProjectConfig) -> tuple[ProjectProblem, ...]:
                 )
 
     bibliography = config.markdown_extensions.get("prodockit.bibliography", {})
+    if bibliography.get("bib_file"):
+        bib_file = Path(str(bibliography["bib_file"]))
+        bib_file = bib_file if bib_file.is_absolute() else config.root / bib_file
+        if not bib_file.is_file():
+            problems.append(
+                ProjectProblem(
+                    'project.markdown_extensions."prodockit.bibliography".bib_file',
+                    f"file does not exist: {_display(config, bib_file)}",
+                )
+            )
     if bibliography.get("csl_style"):
         style = Path(str(bibliography["csl_style"]))
         style = style if style.is_absolute() else config.root / style
