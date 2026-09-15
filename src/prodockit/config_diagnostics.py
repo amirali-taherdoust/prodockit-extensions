@@ -84,6 +84,26 @@ def _extension_defaults(extension_type: type[Extension]) -> dict[str, Any]:
     return extension_type().getConfigs()
 
 
+def _extension_option_type_error(value: object, default: object) -> str | None:
+    """Describe an incompatible explicit extension option, if there is one.
+
+    Python-Markdown's extension registry already supplies one concrete default
+    per user-facing option. Use that as the type contract, while leaving
+    ``None`` defaults alone because they do not identify a safe expected type.
+    """
+    if isinstance(default, bool):
+        return None if isinstance(value, bool) else "must be true or false (without quotes)"
+    if isinstance(default, str):
+        return None if isinstance(value, str) else "must be a string"
+    if isinstance(default, list):
+        return None if isinstance(value, list) else "must be a list"
+    if isinstance(default, dict):
+        return None if isinstance(value, dict) else "must be a mapping"
+    if default is None or isinstance(value, type(default)):
+        return None
+    return f"must be a {type(default).__name__}"
+
+
 def _suggest(value: str, choices: list[str]) -> str:
     matches = difflib.get_close_matches(value, choices, n=1, cutoff=0.6)
     return f"; did you mean {matches[0]!r}?" if matches else ""
@@ -152,6 +172,7 @@ def inspect_config(config: ProjectConfig) -> ConfigReport:
             )
 
     extension_names = sorted(EXTENSION_TYPES)
+    invalid_extension = False
     for name, options in sorted(config.markdown_extensions.items()):
         if not name.startswith("prodockit."):
             continue
@@ -166,14 +187,29 @@ def inspect_config(config: ProjectConfig) -> ConfigReport:
         defaults = _extension_defaults(EXTENSION_TYPES[name])
         for key, default in defaults.items():
             explicit = key in options
+            value = options[key] if explicit else default
             settings.append(
                 ResolvedSetting(
                     f"Extension {name}",
                     key,
-                    options[key] if explicit else default,
+                    value,
                     f"{name}.{key}" if explicit else "default",
                 )
             )
+            # prodockit.index has stricter, shared runtime validation below,
+            # including a non-empty title. Avoid reporting the same bad value
+            # twice here while applying the default-derived contract to every
+            # other registered extension.
+            if explicit and name != "prodockit.index":
+                type_error = _extension_option_type_error(value, default)
+                if type_error is not None:
+                    invalid_extension = True
+                    diagnostics.append(
+                        Diagnostic(
+                            f'project.markdown_extensions."{name}".{key}',
+                            type_error,
+                        )
+                    )
         for key in options:
             if key not in defaults:
                 diagnostics.append(
@@ -207,7 +243,7 @@ def inspect_config(config: ProjectConfig) -> ConfigReport:
 
     # Integrity consumers may expect typed paths/lists. Report type errors
     # first rather than letting a malformed setting trigger an exception.
-    if not invalid_extra:
+    if not invalid_extra and not invalid_extension:
         diagnostics.extend(
             Diagnostic(problem.path, problem.message) for problem in inspect_project(config)
         )
