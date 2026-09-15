@@ -120,11 +120,13 @@ def test_validate_built_site_requires_the_site_directory(tmp_path: Path) -> None
         validate_built_site(config, ["index.md"])
 
 
-def test_validate_built_site_requires_the_root_index(tmp_path: Path) -> None:
+def test_validate_built_site_accepts_selected_page_without_a_root_index(tmp_path: Path) -> None:
     config = _config(tmp_path)
+    page = config.site_dir / "guide" / "start" / "index.html"
+    page.parent.mkdir(parents=True)
+    page.write_text("page", encoding="utf-8")
 
-    with pytest.raises(BuiltSiteError, match="has no index page"):
-        validate_built_site(config, ["guide/start.md"])
+    validate_built_site(config, ["guide/start.md"])
 
 
 @pytest.mark.parametrize(
