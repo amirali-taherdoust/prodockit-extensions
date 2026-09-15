@@ -117,6 +117,29 @@ def test_discover_source_files_lists_tracked_files_sorted(tmp_path: Path) -> Non
     assert discover_source_files(str(tmp_path)) == ["a.py", "b.py"]
 
 
+def test_discover_source_files_preserves_a_unicode_filename(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    filename = "café.md"
+    (tmp_path / filename).write_text("Unicode path\n", encoding="utf-8")
+    subprocess.run(["git", "add", filename], cwd=tmp_path, check=True)
+
+    assert discover_source_files(str(tmp_path)) == [filename]
+
+
+def test_discover_source_files_does_not_split_a_filename_containing_a_newline(
+    tmp_path: Path,
+) -> None:
+    _init_git_repo(tmp_path)
+    filename = "first line\nsecond line.md"
+    try:
+        (tmp_path / filename).write_text("One source file\n", encoding="utf-8")
+    except OSError:
+        pytest.skip("the filesystem does not permit newlines in filenames")
+    subprocess.run(["git", "add", filename], cwd=tmp_path, check=True)
+
+    assert discover_source_files(str(tmp_path)) == [filename]
+
+
 def test_discover_source_files_excludes_gitignored_files(tmp_path: Path) -> None:
     _init_git_repo(tmp_path)
     (tmp_path / ".gitignore").write_text("ignored.txt\n", encoding="utf-8")

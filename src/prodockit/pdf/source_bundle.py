@@ -144,23 +144,30 @@ def discover_source_files(root: str = ".") -> list[str]:
     an always-excluded file (see `_EXCLUDED_DIR_NAMES`/`_EXCLUDED_FILE_NAMES`),
     which is filtered out unconditionally.
 
-    Shells out to `git ls-files --cached --others --exclude-standard`
+    Shells out to `git ls-files -z --cached --others --exclude-standard`
     rather than reimplementing `.gitignore`'s own matching rules (nested
     `.gitignore` files, global excludes, negation patterns, and so on) -
     `git` already has to get every one of those exactly right, and `root`
     is a git working tree in every real use of this function (`prodockit
-    pdf`'s own CLI only ever runs from a project's repository root).
+    pdf`'s own CLI only ever runs from a project's repository root). The
+    NUL-separated byte stream is machine-readable even when a path contains
+    newlines or characters that Git's human-readable output would C-quote.
 
     Raises `SourceBundleError` if `root` isn't a git working tree, or `git`
     itself isn't on `PATH`.
     """
     try:
         result = subprocess.run(
-            [find("git"), "ls-files", "--cached", "--others", "--exclude-standard"],
+            [
+                find("git"),
+                "ls-files",
+                "-z",
+                "--cached",
+                "--others",
+                "--exclude-standard",
+            ],
             cwd=root,
             capture_output=True,
-            text=True,
-            encoding="utf-8",
         )
     except FileNotFoundError as exc:
         raise SourceBundleError("git is not installed or not on PATH") from exc
@@ -168,9 +175,9 @@ def discover_source_files(root: str = ".") -> list[str]:
         raise SourceBundleError(
             f"git ls-files failed in {root!r}",
             returncode=result.returncode,
-            stderr=result.stderr,
+            stderr=result.stderr.decode("utf-8", errors="replace"),
         )
-    all_files = sorted(line for line in result.stdout.splitlines() if line)
+    all_files = sorted(os.fsdecode(path) for path in result.stdout.split(b"\0") if path)
     base = Path(root).resolve()
     return [
         f for f in all_files if not _is_excluded(f) and _is_regular_source_file(base, f)
