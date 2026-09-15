@@ -204,6 +204,33 @@ def test_check_passes_valid_prodockit_configuration(tmp_path: Path) -> None:
     assert "Configuration check passed" in result.output
 
 
+TEXT_EXTENSION_OPTIONS = [
+    (name, key)
+    for name, extension_type in EXTENSION_TYPES.items()
+    if name != "prodockit.index"
+    for key, default in extension_type().getConfigs().items()
+    if isinstance(default, str)
+]
+
+
+@pytest.mark.parametrize("name,key", TEXT_EXTENSION_OPTIONS)
+@pytest.mark.parametrize("invalid_value", ["42", "false", "[]", "{}"])
+def test_check_rejects_invalid_text_extension_option_types(
+    tmp_path: Path, name: str, key: str, invalid_value: str
+) -> None:
+    path = _config(
+        tmp_path,
+        f'\n[project.markdown_extensions."{name}"]\n{key} = {invalid_value}\n',
+    )
+
+    result = _run(path, check=True)
+
+    assert result.exit_code == 1
+    assert f'project.markdown_extensions."{name}".{key}' in result.output
+    assert "must be a string" in result.output
+    assert "Traceback" not in result.output
+
+
 def test_check_rejects_invalid_index_value_types(tmp_path: Path) -> None:
     path = _config(
         tmp_path,
