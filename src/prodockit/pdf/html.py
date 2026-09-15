@@ -505,16 +505,17 @@ def fix_up_page_html(
     virtual_page_map = {virtual_page_path(key): anchor for key, anchor in page_anchor_map.items()}
     for a in soup.find_all("a", href=True):
         href = a["href"]
-        if href.startswith(("http://", "https://", "mailto:", "#")):
+        parts = urlsplit(href)
+        if parts.scheme or parts.netloc or href.startswith(("#", "/")):
             continue
-        target, _, frag = href.partition("#")
+        target = unquote(parts.path)
         if not target:
             continue
         joined = os.path.normpath(os.path.join(current_virtual_dir, target))
         resolved = joined.replace("\\", "/").rstrip("/")
         anchor = virtual_page_map.get(resolved)
         if anchor is not None:
-            a["href"] = f"#{frag}" if frag else f"#{anchor}"
+            a["href"] = f"#{parts.fragment}" if parts.fragment else f"#{anchor}"
 
     # Pages omitted from the PDF still have clean website URLs. Recover
     # their source paths before falling back to repository-file links.

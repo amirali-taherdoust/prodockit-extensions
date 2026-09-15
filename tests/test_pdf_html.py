@@ -709,6 +709,32 @@ def test_included_page_links_remain_internal(tmp_path):
     assert BeautifulSoup(html, "html.parser").a["href"] == "#page-about-changelog"
 
 
+def test_included_page_link_with_query_remains_internal(tmp_path):
+    html = _fix(
+        '<a href="../changelog/?view=print#release">Release notes</a>',
+        current_docs_rel_path="about/support.md",
+        docs_dir=str(tmp_path / "docs"),
+        project_root=str(tmp_path),
+        source_page_paths=["about/changelog.md"],
+        page_anchor_map={"about/changelog.md": "page-about-changelog"},
+        repo_url="https://github.com/example/repo",
+    )
+    assert BeautifulSoup(html, "html.parser").a["href"] == "#release"
+
+
+def test_percent_encoded_included_page_link_remains_internal(tmp_path):
+    html = _fix(
+        '<a href="../my%20page/#space-target">Space target</a>',
+        current_docs_rel_path="about/support.md",
+        docs_dir=str(tmp_path / "docs"),
+        project_root=str(tmp_path),
+        source_page_paths=["about/my page.md"],
+        page_anchor_map={"about/my page.md": "page-about-my-page"},
+        repo_url="https://github.com/example/repo",
+    )
+    assert BeautifulSoup(html, "html.parser").a["href"] == "#space-target"
+
+
 @pytest.mark.parametrize("symlink", [False, True])
 def test_outside_project_file_links_keep_only_the_label(tmp_path, symlink):
     root = tmp_path / "project"
