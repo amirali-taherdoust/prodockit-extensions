@@ -336,6 +336,11 @@ behaviour and any action required. Do not reproduce defects, pull-request
 detail, or commit subjects; Git commits, issues, pull requests, tags, and
 GitHub Releases retain that history.
 
+Keep each fix to one source line and each new feature to no more than two
+source lines. Combine closely related fixes when that makes the user-visible
+outcome clearer; do not spend separate bullets on internal implementation
+work that does not change behaviour.
+
 The changelog tests enforce one Unreleased section at most, its position,
 newest-first released versions, and its website-only policy. They do not know
 whether a user-relevant change was omitted, so the comparison with `git log`
