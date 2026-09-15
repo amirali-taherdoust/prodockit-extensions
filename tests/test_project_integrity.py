@@ -152,6 +152,35 @@ def test_local_markdown_images_exist_after_query_and_theme_fragment_are_removed(
     assert not any("example.png" in message for message in messages)
 
 
+def test_local_markdown_image_paths_may_contain_balanced_parentheses(
+    tmp_path: Path,
+) -> None:
+    config = _project(
+        tmp_path,
+        "",
+        {
+            "index.md": "![Parenthesised](assets/foo(bar).svg)\n",
+            "assets/foo(bar).svg": "<svg></svg>\n",
+        },
+    )
+
+    assert _messages(config) == []
+
+
+def test_missing_parenthesised_image_reports_the_complete_destination(
+    tmp_path: Path,
+) -> None:
+    config = _project(
+        tmp_path,
+        "",
+        {"index.md": "![Parenthesised](assets/foo(bar).svg)\n"},
+    )
+
+    assert _messages(config) == [
+        "docs/index.md: image does not exist: assets/foo(bar).svg"
+    ]
+
+
 def test_csl_style_must_exist(tmp_path: Path) -> None:
     config = _project(
         tmp_path,
