@@ -161,6 +161,21 @@ def test_csl_style_must_exist(tmp_path: Path) -> None:
     assert any("styles/house.csl" in message for message in _messages(config))
 
 
+def test_bibliography_file_must_exist(tmp_path: Path) -> None:
+    config = _project(
+        tmp_path,
+        '[project.markdown_extensions."prodockit.bibliography"]\nbib_file = "references.bib"\n',
+    )
+
+    assert _messages(config) == [
+        'project.markdown_extensions."prodockit.bibliography".bib_file: '
+        "file does not exist: references.bib"
+    ]
+
+    (tmp_path / "references.bib").write_text("", encoding="utf-8")
+    assert _messages(config) == []
+
+
 @pytest.mark.parametrize(
     ("source", "extension"),
     [

@@ -70,6 +70,24 @@ def test_comment_only_reference_passes_config_check(tmp_path: Path) -> None:
     assert "prodockit.refs is not enabled" not in result.output
 
 
+def test_config_check_reports_a_missing_bibliography_file(tmp_path: Path) -> None:
+    path = _config(
+        tmp_path,
+        '\n[project.markdown_extensions."prodockit.bibliography"]\n'
+        'bib_file = "references.bib"\n',
+    )
+
+    result = _run(path, check=True)
+
+    assert result.exit_code == 1
+    assert (
+        'project.markdown_extensions."prodockit.bibliography".bib_file'
+        in result.output
+    )
+    assert "file does not exist: references.bib" in result.output
+    assert "Traceback" not in result.output
+
+
 def _config(tmp_path: Path, body: str = "") -> Path:
     path = tmp_path / "zensical.toml"
     path.write_text(

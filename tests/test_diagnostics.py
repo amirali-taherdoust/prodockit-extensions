@@ -1938,6 +1938,25 @@ def test_pdk_diag_reports_local_assets_omitted_from_zensical_toml(tmp_path: Path
     assert any("docs/javascripts/unused.js" in detail for detail in check.details)
 
 
+def test_pdk_diag_reports_a_missing_bibliography_file(tmp_path: Path) -> None:
+    config = tmp_path / "zensical.toml"
+    config.write_text(
+        '[project]\nsite_name = "Example"\n'
+        '[project.markdown_extensions."prodockit.bibliography"]\n'
+        'bib_file = "references.bib"\n',
+        encoding="utf-8",
+    )
+
+    _loaded, check = diagnostics._configuration_check(config)
+
+    assert check.status == "fail"
+    assert any(
+        'project.markdown_extensions."prodockit.bibliography".bib_file' in detail
+        and "file does not exist: references.bib" in detail
+        for detail in check.details
+    )
+
+
 def test_stage5_repairs_unique_setting_typo_without_losing_comments(tmp_path: Path) -> None:
     config = tmp_path / "zensical.toml"
     config.write_text(
