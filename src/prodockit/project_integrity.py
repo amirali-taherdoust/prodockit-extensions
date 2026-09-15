@@ -12,6 +12,8 @@ from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
+from markdown import markdown as render_markdown
+
 from prodockit.csl import CslError
 from prodockit.csl import validate as validate_csl
 from prodockit.project_config import ProjectConfig, load_project_config
@@ -26,13 +28,6 @@ class ProjectProblem:
     message: str
 
 
-_INLINE_IMAGE_RE = re.compile(
-    r"!\[[^\]]*\]\(\s*(?:<(?P<angle>[^>]+)>|(?P<plain>[^\s)]+))"
-)
-_REFERENCE_IMAGE_RE = re.compile(r"!\[([^\]]*)\]\[([^\]]*)\]")
-_REFERENCE_DEFINITION_RE = re.compile(
-    r"^\s*\[([^\]]+)\]:\s*(?:<([^>]+)>|([^\s]+))", re.MULTILINE
-)
 _INLINE_CODE_RE = re.compile(r"(`+)(.*?)\1")
 _ARITHMATEX_RE = re.compile(
     r"(?:"
@@ -298,23 +293,10 @@ def _unconfigured_assets(config: ProjectConfig) -> list[ProjectProblem]:
 
 
 def _markdown_image_sources(source: str) -> list[str]:
-    clean = _scannable_markdown(source)
-    references = {
-        match.group(1).strip().casefold(): (match.group(2) or match.group(3))
-        for match in _REFERENCE_DEFINITION_RE.finditer(clean)
-    }
-    found = [
-        match.group("angle") or match.group("plain")
-        for match in _INLINE_IMAGE_RE.finditer(clean)
-    ]
-    for match in _REFERENCE_IMAGE_RE.finditer(clean):
-        key = (match.group(2).strip() or match.group(1).strip()).casefold()
-        if key and key in references:
-            found.append(references[key])
+    """Return image destinations using Markdown's own balanced parser."""
     parser = _ImageParser()
-    parser.feed(clean)
-    found.extend(parser.sources)
-    return found
+    parser.feed(render_markdown(_scannable_markdown(source)))
+    return parser.sources
 
 
 def _tool_path(root: Path, configured: object, defaults: tuple[str, ...]) -> Path | None:
