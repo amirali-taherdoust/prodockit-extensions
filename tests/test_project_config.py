@@ -71,6 +71,44 @@ markdown_extensions:
     )
 
 
+def test_yaml_rejects_duplicate_mapping_keys(tmp_path: Path) -> None:
+    path = tmp_path / "zensical.yml"
+    path.write_text(
+        "site_name: First title\nsite_name: Second title\ndocs_dir: docs\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ProjectConfigError, match=r"duplicate key 'site_name'.*line 2"):
+        load_project_config(path)
+
+
+def test_yaml_rejects_duplicate_keys_in_nested_mappings(tmp_path: Path) -> None:
+    path = tmp_path / "zensical.yml"
+    path.write_text(
+        "markdown_extensions:\n"
+        "  prodockit.refs:\n"
+        "    unresolved: '?'\n"
+        "    unresolved: '??'\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ProjectConfigError, match=r"duplicate key 'unresolved'.*line 4"):
+        load_project_config(path)
+
+
+def test_yaml_merge_keys_may_be_overridden_explicitly(tmp_path: Path) -> None:
+    path = tmp_path / "zensical.yml"
+    path.write_text(
+        "defaults: &defaults\n"
+        "  site_name: Default title\n"
+        "<<: *defaults\n"
+        "site_name: Project title\n",
+        encoding="utf-8",
+    )
+
+    assert load_project_config(path).site_name == "Project title"
+
+
 def test_toml_dotted_extension_tables_are_normalised_to_extension_names(
     tmp_path: Path,
 ) -> None:
