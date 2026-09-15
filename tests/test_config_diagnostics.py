@@ -111,6 +111,19 @@ def test_config_check_reports_a_missing_bibliography_file(tmp_path: Path) -> Non
     assert "Traceback" not in result.output
 
 
+def test_indented_code_reference_passes_config_check(tmp_path: Path) -> None:
+    path = _config(tmp_path)
+    (tmp_path / "writing").mkdir()
+    (tmp_path / "writing" / "index.md").write_text(
+        "# Page\n\n    Example: \\ref{target}.\n", encoding="utf-8"
+    )
+
+    result = _run(path, check=True)
+
+    assert result.exit_code == 0, result.output
+    assert "prodockit.refs is not enabled" not in result.output
+
+
 def _config(tmp_path: Path, body: str = "") -> Path:
     path = tmp_path / "zensical.toml"
     path.write_text(

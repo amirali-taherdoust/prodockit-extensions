@@ -2005,6 +2005,21 @@ def test_pdk_diag_reports_a_missing_bibliography_file(tmp_path: Path) -> None:
     )
 
 
+def test_pdk_diag_ignores_reference_syntax_in_indented_code(tmp_path: Path) -> None:
+    config = tmp_path / "zensical.toml"
+    config.write_text('[project]\nsite_name = "Example"\n', encoding="utf-8")
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "index.md").write_text(
+        "# Page\n\n    Example: \\ref{target}.\n", encoding="utf-8"
+    )
+
+    _loaded, check = diagnostics._configuration_check(config)
+
+    assert check.status == "pass"
+    assert not any("prodockit.refs is not enabled" in detail for detail in check.details)
+
+
 def test_stage5_repairs_unique_setting_typo_without_losing_comments(tmp_path: Path) -> None:
     config = tmp_path / "zensical.toml"
     config.write_text(

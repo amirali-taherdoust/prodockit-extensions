@@ -68,6 +68,27 @@ class _ImageParser(HTMLParser):
             self.sources.append(str(values["src"]))
 
 
+class _ScannableTextParser(HTMLParser):
+    """Collect rendered Markdown text while excluding literal code."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.code_depth = 0
+        self.parts: list[str] = []
+
+    def handle_starttag(self, tag: str, _attrs: list[tuple[str, str | None]]) -> None:
+        if tag.casefold() in {"code", "pre"}:
+            self.code_depth += 1
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag.casefold() in {"code", "pre"}:
+            self.code_depth = max(0, self.code_depth - 1)
+
+    def handle_data(self, data: str) -> None:
+        if not self.code_depth:
+            self.parts.append(data)
+
+
 def _without_fenced_code(source: str) -> str:
     """Blank fenced code, preserving line numbers and ordinary directives."""
     lines: list[str] = []
@@ -113,6 +134,13 @@ def _scannable_markdown(source: str) -> str:
         source,
         flags=re.DOTALL,
     )
+
+
+def _active_markdown_text(source: str) -> str:
+    """Return active prose while excluding Markdown literal-code blocks."""
+    parser = _ScannableTextParser()
+    parser.feed(render_markdown(_scannable_markdown(source)))
+    return "\n".join(parser.parts)
 
 
 def count_mermaid_fences(source: str) -> int:
@@ -182,7 +210,7 @@ def _uses_mermaid(source: str) -> bool:
 
 def count_math_expressions(source: str) -> int:
     """Count active Arithmatex notation, excluding documented examples."""
-    return sum(1 for _ in _ARITHMATEX_RE.finditer(_scannable_markdown(source)))
+    return sum(1 for _ in _ARITHMATEX_RE.finditer(_active_markdown_text(source)))
 
 
 def _uses_maths(source: str) -> bool:
@@ -395,7 +423,7 @@ def inspect_project(config: ProjectConfig) -> tuple[ProjectProblem, ...]:
                         f"image does not exist: {image}",
                     )
                 )
-        clean = _scannable_markdown(source)
+        clean = _active_markdown_text(source)
         for pattern, extension, syntax in _SYNTAX_REQUIREMENTS:
             if extension not in enabled and pattern.search(clean):
                 problems.append(

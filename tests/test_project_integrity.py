@@ -248,6 +248,35 @@ def test_example_syntax_in_code_does_not_require_an_extension(tmp_path: Path) ->
 
 
 @pytest.mark.parametrize(
+    "source",
+    [
+        "# Page\n\n    Example reference: \\ref{target}.\n",
+        "# Page\n\n\tExample reference: \\ref{target}.\n",
+        "# Page\n\n>     Example reference: \\ref{target}.\n",
+        "# Page\n\n- Item\n\n        Example reference: \\ref{target}.\n",
+    ],
+)
+def test_example_syntax_in_indented_code_does_not_require_an_extension(
+    tmp_path: Path, source: str
+) -> None:
+    config = _project(tmp_path, "", {"index.md": source})
+
+    assert _messages(config) == []
+
+
+def test_active_syntax_in_an_indented_list_paragraph_still_requires_extension(
+    tmp_path: Path,
+) -> None:
+    config = _project(
+        tmp_path,
+        "",
+        {"index.md": "# Page\n\n- Item\n\n    Active reference: \\ref{target}.\n"},
+    )
+
+    assert any("prodockit.refs" in message for message in _messages(config))
+
+
+@pytest.mark.parametrize(
     "syntax",
     [
         r"\ref{target}",
@@ -381,6 +410,8 @@ def test_configured_maths_is_optional_until_notation_uses_it(tmp_path: Path) -> 
         "`` Example: `$$x^2$$` ``",
         "```markdown\n$$\nx^2\n$$\n```",
         "~~~text\n$$x^2$$\n~~~",
+        "    Example: $$x^2$$",
+        "\tExample: $$x^2$$",
         r"\$\$x^2\$\$",
     ],
 )
