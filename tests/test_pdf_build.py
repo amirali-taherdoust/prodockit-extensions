@@ -115,6 +115,31 @@ def test_keep_work_dir_leaves_intermediate_files_in_place(tmp_path: Path, fake_p
     assert (work_dir / "_prodockit_pdf_compiled.css").exists()
 
 
+def test_pandoc_receives_site_name_as_page_title_metadata(
+    tmp_path: Path, fake_pandoc_on_path
+) -> None:
+    args_path = tmp_path / "args.txt"
+    work_dir = tmp_path / "work"
+    fake_pandoc_on_path(
+        f'printf "%s\\n" "$@" > "{args_path}"; echo "%PDF-1.4 stub" > "$3"'
+    )
+
+    build_pdf(
+        [Page(docs_rel_path="index.md", html="<h1>Report</h1>", is_index=True)],
+        str(tmp_path / "out.pdf"),
+        site_name='Research & Development "Report"',
+        work_dir=str(work_dir),
+        keep_work_dir=True,
+    )
+
+    args = args_path.read_text(encoding="utf-8").splitlines()
+    metadata_position = args.index("--metadata")
+    assert args[metadata_position + 1] == 'pagetitle=Research & Development "Report"'
+
+    compiled = (work_dir / "_prodockit_pdf_compiled.html").read_text(encoding="utf-8")
+    assert "<title>" not in compiled
+
+
 def test_auto_created_temp_dir_is_always_cleaned_up_even_with_keep_work_dir(tmp_path: Path, fake_pandoc_on_path) -> None:
     """keep_work_dir only makes sense with an explicit work_dir - an
     auto-created temporary directory has no path the caller could go look
