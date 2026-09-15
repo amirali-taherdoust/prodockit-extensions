@@ -19,6 +19,15 @@ only when it adds or changes behaviour that matters to a user, or requires an
 upgrade action. Defect-by-defect history belongs in GitHub issues and pull
 requests rather than here.
 
+## 0.65.7 (2026-09-15)
+
+- Made project checks report invalid UTF-8 Markdown, duplicate YAML keys, invalid extension options, missing bibliographies, and unsafe PDF paths directly.
+- Prevented source bundles from following symlinks and made credential redaction case-insensitive.
+- Corrected PDF title metadata, image and included-PDF URLs, colliding page anchors, and selected-page validation.
+- Improved Diagnostics for shallow repositories, quoted Git paths, and indented code while preserving the configured project filename.
+- Made Pandoc replacement tolerate transient Windows locks and made WeasyPrint health checks report unusable installations accurately.
+- Added a behavior-preserving Mermaid renderer boundary so a standalone renderer can be introduced independently in a later release.
+
 ## 0.65.6 (2026-09-14)
 
 - Clarify the clean-install, Surrey GitLab, GitHub, and GitLab publishing steps
