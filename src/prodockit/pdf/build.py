@@ -519,6 +519,11 @@ def build_pdf(
             "--pdf-engine=weasyprint",
             "--pdf-engine-opt=-q",
             "--mathjax",
+            # `pagetitle` sets the generated PDF's Title metadata without
+            # creating Pandoc's visible title block. Without it, Pandoc falls
+            # back to the internal `_prodockit_pdf_compiled` input filename.
+            "--metadata",
+            f"pagetitle={site_name}",
             # Pandoc's HTML writer hard-wraps its output text at ~72 columns
             # by default, inserting newlines *inside* elements. Those are
             # insignificant whitespace in HTML, but WeasyPrint's
