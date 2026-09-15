@@ -42,6 +42,32 @@ def test_build_page_anchor_map_produces_deterministic_slugs() -> None:
     assert anchors["index.md"] == "page-index"
 
 
+def test_build_page_anchor_map_disambiguates_colliding_slugs() -> None:
+    anchors = build_page_anchor_map(["risk_log.md", "risk-log.md"])
+
+    assert anchors == {
+        "risk_log.md": "page-risk-log",
+        "risk-log.md": "page-risk-log-2",
+    }
+
+
+def test_build_page_anchor_map_preserves_reserved_natural_slugs() -> None:
+    anchors = build_page_anchor_map(["risk_log.md", "risk-log.md", "risk-log-2.md"])
+
+    assert anchors == {
+        "risk_log.md": "page-risk-log",
+        "risk-log.md": "page-risk-log-3",
+        "risk-log-2.md": "page-risk-log-2",
+    }
+    assert len(set(anchors.values())) == len(anchors)
+
+
+def test_build_page_anchor_map_reuses_an_anchor_for_a_repeated_source_path() -> None:
+    anchors = build_page_anchor_map(["guide.md", "guide.md"])
+
+    assert anchors == {"guide.md": "page-guide"}
+
+
 def test_build_virtual_page_map_keys_by_virtual_path() -> None:
     virtual_map = build_virtual_page_map(["starthere/installtooling.md"])
     assert virtual_map["starthere/installtooling"] == "page-starthere-installtooling"
@@ -301,6 +327,18 @@ def test_cross_page_link_with_fragment_keeps_only_the_fragment() -> None:
         page_anchor_map=anchor_map,
     )
     assert 'href="#some-heading"' in html
+
+
+def test_colliding_page_slugs_rewrite_to_distinct_anchors() -> None:
+    anchor_map = build_page_anchor_map(["links.md", "risk_log.md", "risk-log.md"])
+    html = _fix(
+        '<a href="../risk_log">Underscore</a><a href="../risk-log">Hyphen</a>',
+        current_docs_rel_path="links.md",
+        page_anchor_map=anchor_map,
+    )
+    links = BeautifulSoup(html, "html.parser").find_all("a")
+
+    assert [link["href"] for link in links] == ["#page-risk-log", "#page-risk-log-2"]
 
 
 def test_external_and_fragment_only_links_are_left_alone() -> None:

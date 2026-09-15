@@ -68,11 +68,24 @@ def build_page_anchor_map(md_files: list[str]) -> dict[str, str]:
     from. Rewriting such links to in-document anchors instead (see
     :func:`fix_up_page_html`'s cross-page link handling) fixes that.
     """
-    page_anchor_map = {}
-    for f in md_files:
-        key = os.path.normpath(f).replace("\\", "/")
-        slug = re.sub(r"[^a-z0-9]+", "-", key.lower().rsplit(".", 1)[0]).strip("-")
-        page_anchor_map[key] = f"page-{slug}"
+    keys = list(dict.fromkeys(os.path.normpath(f).replace("\\", "/") for f in md_files))
+    base_anchors = {
+        key: "page-"
+        + re.sub(r"[^a-z0-9]+", "-", key.lower().rsplit(".", 1)[0]).strip("-")
+        for key in keys
+    }
+    reserved_anchors = set(base_anchors.values())
+    used_anchors: set[str] = set()
+    page_anchor_map: dict[str, str] = {}
+    for key in keys:
+        anchor = base_anchors[key]
+        if anchor in used_anchors:
+            suffix = 2
+            while f"{anchor}-{suffix}" in reserved_anchors | used_anchors:
+                suffix += 1
+            anchor = f"{anchor}-{suffix}"
+        page_anchor_map[key] = anchor
+        used_anchors.add(anchor)
     return page_anchor_map
 
 
