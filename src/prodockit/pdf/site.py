@@ -36,9 +36,6 @@ def validate_built_site(config: ProjectConfig, source_paths: list[str]) -> None:
     instruction = "run `zensical build --clean --strict` first"
     if not config.site_dir.is_dir():
         raise BuiltSiteError(f"built site not found: {config.site_dir}; {instruction}")
-    index = config.site_dir / "index.html"
-    if not index.is_file():
-        raise BuiltSiteError(f"built site has no index page: {index}; {instruction}")
 
     directory_urls = bool(config.project.get("use_directory_urls", True))
     missing = []
