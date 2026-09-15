@@ -343,8 +343,9 @@ REPAIR_REGISTRY: dict[str, RepairPolicy] = {
     ),
     "repository.git": RepairPolicy(
         "prohibited",
-        "Repository creation and remote selection require author intent.",
-        "Install or configure Git and remotes explicitly.",
+        "Repository creation, remote selection and history recovery require author intent.",
+        "Install or configure Git and remotes explicitly; fetch complete history when a shallow "
+        "checkout is reported.",
     ),
     "repository.template-metadata": RepairPolicy(
         "prohibited",
@@ -3691,17 +3692,59 @@ def _repository_checks(root: Path, online: bool) -> list[DiagnosticResult]:
     remote_lines = tuple(
         dict.fromkeys(line for line in remotes.stdout.splitlines() if line.strip())
     )
+    remote_details = tuple(_sanitise_text(line, root) for line in remote_lines) or (
+        "no remotes configured",
+    )
+    repository_status: Status = "pass"
+    repository_summary = f"Git repository found at {_display_path(git_root, root)}"
+    repository_details = remote_details
+    shallow: bool | None = None
+    try:
+        history = _run(
+            [git, "-C", str(git_root), "rev-parse", "--is-shallow-repository"]
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        repository_status = "warn"
+        repository_summary = "Git repository found, but history depth could not be inspected"
+        repository_details = (*remote_details, str(error))
+    else:
+        history_value = history.stdout.strip().lower()
+        if history.returncode:
+            repository_status = "warn"
+            repository_summary = "Git repository found, but history depth could not be inspected"
+            evidence = history.stderr.strip() or "git did not report the repository history depth"
+            repository_details = (*remote_details, _sanitise_text(evidence, root))
+        elif history_value == "true":
+            repository_status = "fail"
+            repository_summary = (
+                "Git repository is a shallow checkout; PDF revision dates need complete history"
+            )
+            repository_details = (
+                *remote_details,
+                "Run `git fetch --unshallow` to retrieve the complete history.",
+                'In GitHub Actions use `fetch-depth: 0`; in GitLab CI use `GIT_DEPTH: "0"`.',
+            )
+            shallow = True
+        elif history_value == "false":
+            shallow = False
+        else:
+            repository_status = "warn"
+            repository_summary = "Git repository found, but history depth could not be inspected"
+            repository_details = (
+                *remote_details,
+                f"git returned an unexpected shallow-repository value: {history.stdout.strip()!r}",
+            )
     checks = [
         DiagnosticResult(
             "repository.git",
             "Repository and template maintenance",
-            "pass",
-            f"Git repository found at {_display_path(git_root, root)}",
-            tuple(_sanitise_text(line, root) for line in remote_lines)
-            or ("no remotes configured",),
+            repository_status,
+            repository_summary,
+            repository_details,
             {
                 "root": _display_path(git_root, root),
                 "remotes": [_sanitise_text(line, root) for line in remote_lines],
+                "shallow": shallow,
             },
         )
     ]

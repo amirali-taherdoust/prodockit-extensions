@@ -2776,7 +2776,14 @@ def _run_pdf_command(
     started = time.monotonic()
     try:
         output_path = builder(config_file, markdown_file=markdown_file, on_stage=say)
-    except (BuiltSiteError, PdfBuildError, SourceBundleError, ValueError, OSError) as error:
+    except (
+        BuiltSiteError,
+        PdfBuildError,
+        RevisionDateError,
+        SourceBundleError,
+        ValueError,
+        OSError,
+    ) as error:
         click.echo(f"Error: {error}", err=True)
         _echo_captured_stderr(error)
         sys.exit(1)
