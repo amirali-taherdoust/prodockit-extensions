@@ -19,6 +19,7 @@ from prodockit.pdf.config import (
     build_source_bundle_from_zensical_config,
 )
 from prodockit.pdf.web_render import WebRenderError
+from prodockit.settings import SettingError
 
 _ZENSICAL_TOML = """
 [project]
@@ -448,6 +449,17 @@ def test_pdf_output_path_is_configurable(project) -> None:
     assert (root / output_path).exists()
 
 
+def test_pdf_output_cannot_overwrite_an_authored_markdown_file(project) -> None:
+    root = project(extra='\n[project.extra]\npdf_output = "docs/index.md"\n')
+    source = root / "docs" / "index.md"
+    original = source.read_bytes()
+
+    with pytest.raises(SettingError, match=r"pdf_output.*\.pdf"):
+        build_pdf_from_zensical_config(str(root / "zensical.toml"))
+
+    assert source.read_bytes() == original
+
+
 def test_appendix_front_matter_flag_is_read_from_the_page(
     project, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -858,6 +870,19 @@ def test_source_bundle_output_path_is_configurable(source_bundle_project) -> Non
 
     assert output_path == "dist/src.pdf"
     assert (root / "dist" / "src.pdf").exists()
+
+
+def test_source_bundle_output_cannot_overwrite_the_active_config(source_bundle_project) -> None:
+    root = source_bundle_project(
+        extra='\n[project.extra]\npdf_source_bundle_output = "zensical.toml"\n'
+    )
+    source = root / "zensical.toml"
+    original = source.read_bytes()
+
+    with pytest.raises(SettingError, match=r"pdf_source_bundle_output.*\.pdf"):
+        build_source_bundle_from_zensical_config(str(source))
+
+    assert source.read_bytes() == original
 
 
 def test_source_bundle_report_name_is_the_site_name(

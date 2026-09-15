@@ -30,6 +30,14 @@ def test_every_extra_setting_rejects_incompatible_types(setting) -> None:
     validate_extra_settings({setting.key: valid, "custom_author_setting": {"anything": 42}})
 
 
+@pytest.mark.parametrize("key", ["pdf_output", "pdf_source_bundle_output"])
+def test_pdf_output_settings_require_a_pdf_destination(key: str) -> None:
+    with pytest.raises(SettingError, match=rf"project\.extra\.{key}.*\.pdf"):
+        validate_extra_settings({key: "docs/index.md"})
+
+    validate_extra_settings({key: "dist/report.PDF"})
+
+
 @pytest.mark.parametrize(
     "body",
     [
@@ -48,6 +56,21 @@ def test_config_check_rejects_invalid_extra_types(tmp_path: Path, body: str) -> 
     assert result.exit_code == 1
     assert "project.extra." + body.split(" =")[0] in result.output
     assert "must be" in result.output
+    assert "Traceback" not in result.output
+
+
+def test_config_check_rejects_non_pdf_output_destinations(tmp_path: Path) -> None:
+    path = _config(
+        tmp_path,
+        '\n[project.extra]\npdf_output = "writing/index.md"\n'
+        'pdf_source_bundle_output = "zensical.toml"\n',
+    )
+
+    result = _run(path, check=True)
+
+    assert result.exit_code == 1
+    assert "project.extra.pdf_output must name a .pdf file" in result.output
+    assert "project.extra.pdf_source_bundle_output must name a .pdf file" in result.output
     assert "Traceback" not in result.output
 
 
