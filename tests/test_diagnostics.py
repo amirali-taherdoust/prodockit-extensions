@@ -51,6 +51,51 @@ def test_public_github_template_check_uses_https() -> None:
     )
 
 
+def test_repository_check_distinguishes_complete_and_shallow_history(tmp_path: Path) -> None:
+    git = diagnostics.shutil.which("git")
+    if git is None:
+        pytest.skip("Git is required for the shallow repository test")
+
+    source = tmp_path / "source"
+    subprocess.run([git, "init", "-b", "main", str(source)], check=True, capture_output=True)
+    subprocess.run(
+        [git, "-C", str(source), "config", "user.name", "Tester"],
+        check=True,
+    )
+    subprocess.run(
+        [git, "-C", str(source), "config", "user.email", "tester@example.invalid"],
+        check=True,
+    )
+    (source / "page.md").write_text("first\n", encoding="utf-8")
+    subprocess.run([git, "-C", str(source), "add", "page.md"], check=True)
+    subprocess.run([git, "-C", str(source), "commit", "-m", "First"], check=True)
+    (source / "page.md").write_text("second\n", encoding="utf-8")
+    subprocess.run([git, "-C", str(source), "commit", "-am", "Second"], check=True)
+
+    complete = next(
+        check for check in diagnostics._repository_checks(source, False) if check.id == "repository.git"
+    )
+    assert complete.status == "pass"
+    assert complete.data["shallow"] is False
+
+    shallow = tmp_path / "shallow"
+    subprocess.run(
+        [git, "clone", "--depth", "1", source.as_uri(), str(shallow)],
+        check=True,
+        capture_output=True,
+    )
+    result = next(
+        check
+        for check in diagnostics._repository_checks(shallow, False)
+        if check.id == "repository.git"
+    )
+
+    assert result.status == "fail"
+    assert "shallow" in result.summary.lower()
+    assert any("git fetch --unshallow" in detail for detail in result.details)
+    assert result.data["shallow"] is True
+
+
 def test_path_comparison_handles_posix_and_windows_spellings() -> None:
     assert diagnostics.same_path("/opt/pdk", "/opt/pdk/", platform="linux")
     assert diagnostics.same_path(

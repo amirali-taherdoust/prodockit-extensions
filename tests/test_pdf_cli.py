@@ -175,6 +175,23 @@ def test_public_pdf_command_reports_built_site_boundary_errors(monkeypatch) -> N
     assert "Error: generated page is missing its article" in result.output
 
 
+def test_public_pdf_command_reports_revision_date_errors_without_a_traceback(monkeypatch) -> None:
+    import prodockit.cli as cli_module
+
+    def fail(*args, **kwargs):
+        raise cli_module.RevisionDateError(
+            "revision dates need complete Git history, but this is a shallow checkout"
+        )
+
+    monkeypatch.setattr(cli_module, "build_pdf_from_built_site", fail)
+
+    result = CliRunner().invoke(main, ["pdf"])
+
+    assert result.exit_code == 1
+    assert "Error: revision dates need complete Git history" in result.output
+    assert "Traceback" not in result.output
+
+
 def test_public_pdf_command_requires_an_explicit_prior_site_build(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
