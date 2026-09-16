@@ -518,6 +518,60 @@ def _convert_as_zensical_page_with_attr_list(text: str, path: str) -> str:
     return md.convert(text)
 
 
+def test_forward_reference_resolves_long_form_attr_list_heading_id(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The nav pre-scan must recognise the same ``id=`` spelling that
+    Python-Markdown's attr_list accepts on the real target page."""
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    (docs_dir / "source.md").write_text("# Source\n", encoding="utf-8")
+    (docs_dir / "target.md").write_text(
+        '# Target\n\n## Different title {: id="custom-target" }\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        prodockit_zensical,
+        "nav_pages",
+        lambda: (str(docs_dir), ["source.md", "target.md"]),
+    )
+
+    html = _convert_as_zensical_page_with_attr_list(
+        "# Source\n\nSee \\ref{custom-target}.\n", "source.md"
+    )
+
+    assert (
+        '<a class="prodockit-ref" href="target.md#custom-target">1.1 Different title</a>'
+        in html
+    )
+
+
+def test_long_form_attr_list_heading_id_does_not_preseed_generated_slug(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An explicit long-form id replaces the generated heading slug; the
+    pre-scan must not expose a link to an anchor the rendered page lacks."""
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    (docs_dir / "source.md").write_text("# Source\n", encoding="utf-8")
+    (docs_dir / "target.md").write_text(
+        '# Target\n\n## Different title {: id="custom-target" }\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        prodockit_zensical,
+        "nav_pages",
+        lambda: (str(docs_dir), ["source.md", "target.md"]),
+    )
+
+    html = _convert_as_zensical_page_with_attr_list(
+        "# Source\n\nSee \\ref{different-title}.\n", "source.md"
+    )
+
+    assert '<a class="prodockit-ref prodockit-ref-unresolved">??</a>' in html
+    assert 'href="target.md#different-title"' not in html
+
+
 def test_preseeded_numbers_match_a_real_conversion(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

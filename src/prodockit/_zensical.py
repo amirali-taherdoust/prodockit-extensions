@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Protocol, TypeVar
 
 from markdown import Markdown
+from markdown.extensions.attr_list import get_attrs_and_remainder
 from markdown.extensions.toc import unique
 
 from prodockit._zensical_page_context import (
@@ -548,9 +549,14 @@ def _scan_page_numberables(
             unnumbered = False
             if attr_match := _TRAILING_ATTR_RE.search(rest):
                 attrs = attr_match.group(1)
-                if id_match := _ID_RE.search(attrs):
-                    explicit_id = id_match.group(1)
-                unnumbered = ".unnumbered" in attrs
+                parsed_attrs, _ = get_attrs_and_remainder(attrs)
+                for name, value in parsed_attrs:
+                    if name == "id":
+                        explicit_id = value
+                unnumbered = any(
+                    name == "." and value == "unnumbered"
+                    for name, value in parsed_attrs
+                )
                 rest = rest[: attr_match.start()]
             rest = re.sub(r"\s+#+\s*$", "", rest)
             items.append(("heading", level, _heading_display_text(rest), explicit_id, unnumbered))
