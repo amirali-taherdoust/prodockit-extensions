@@ -654,6 +654,61 @@ def test_real_heading_registration_does_not_leak_html_stash_between_pages(
     assert "<strong>styled</strong>" not in html
 
 
+def test_real_heading_registration_preserves_stashed_html_entities(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Entity placeholders are visible text, not inline tags to discard."""
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    target = "# Target\n\n## R&amp;D <span>safe</span> {: #entity-target }\n"
+    (docs_dir / "target.md").write_text(target, encoding="utf-8")
+    (docs_dir / "source.md").write_text("# Source\n", encoding="utf-8")
+    monkeypatch.setattr(
+        prodockit_zensical,
+        "nav_pages",
+        lambda: (str(docs_dir), ["target.md", "source.md"]),
+    )
+
+    _convert_as_zensical_page_with_attr_list(target, "target.md")
+    html = _convert_as_zensical_page_with_attr_list(
+        "See \\ref{entity-target}.\n",
+        "source.md",
+    )
+
+    assert (
+        '<a class="prodockit-ref" href="target.md#entity-target">1.1 R&amp;D safe</a>'
+        in html
+    )
+
+
+def test_forward_reference_preserves_literal_html_inside_heading_code(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Inline-code text must produce the same generated id during pre-scan."""
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    (docs_dir / "source.md").write_text("# Source\n", encoding="utf-8")
+    (docs_dir / "target.md").write_text(
+        "# Target\n\n## Use `<span>` token\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        prodockit_zensical,
+        "nav_pages",
+        lambda: (str(docs_dir), ["source.md", "target.md"]),
+    )
+
+    html = _convert_as_zensical_page(
+        "# Source\n\nSee \\ref{use-span-token}.\n",
+        "source.md",
+    )
+
+    assert (
+        '<a class="prodockit-ref" href="target.md#use-span-token">1.1 Use &lt;span&gt; token</a>'
+        in html
+    )
+
+
 def test_long_form_attr_list_heading_id_does_not_preseed_generated_slug(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
