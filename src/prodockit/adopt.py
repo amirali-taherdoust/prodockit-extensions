@@ -928,6 +928,18 @@ def _yaml_add_nested_list_value(
     return source[:child_end] + f"{item_indent}- {rendered}\n" + source[child_end:]
 
 
+def _yaml_extension_name_pattern(name: str) -> str:
+    """A YAML scalar spelling for one known extension name.
+
+    Extension names contain no quote characters, so their plain, single-
+    quoted and double-quoted forms can be matched without interpreting any
+    other YAML scalar syntax. The parsed configuration has already established
+    that all three spellings name the same extension.
+    """
+    literal = re.escape(name)
+    return rf'(?:{literal}|"{literal}"|\'{literal}\')'
+
+
 def _yaml_add_extension(source: str, name: str, lines: tuple[str, ...] = ()) -> str:
     configured = _yaml_block(source, "markdown_extensions")
     style, indent = _yaml_extension_layout(source, configured) if configured else ("sequence", "  ")
@@ -954,8 +966,9 @@ def _yaml_add_extension(source: str, name: str, lines: tuple[str, ...] = ()) -> 
     start, end = configured
     region = source[start:end]
     prefix = "- " if style == "sequence" else ""
+    header = re.escape(indent + prefix) + _yaml_extension_name_pattern(name)
     pattern = re.compile(
-        rf"(?m)^{re.escape(indent + prefix + name)}(?P<colon>:)?"
+        rf"(?m)^{header}(?P<colon>:)?"
         r"(?P<value>[ \t]*(?:null|~|\{\})?)[ \t]*$"
     )
     match = pattern.search(region)
@@ -971,7 +984,7 @@ def _yaml_add_extension(source: str, name: str, lines: tuple[str, ...] = ()) -> 
             # replace it; targeted helpers below add only required keys.
             return source
         return source[:absolute_start] + entry.rstrip("\n") + source[absolute_end:]
-    if re.search(rf"(?m)^{re.escape(indent + prefix + name)}(?:[ \t]*:|[ \t]*$)", region):
+    if re.search(rf"(?m)^{header}(?:[ \t]*:|[ \t]*$)", region):
         raise AdoptError(
             f"{name} uses a YAML form prodockit cannot update safely; "
             "write it as an indented mapping and rerun"
@@ -986,7 +999,7 @@ def _yaml_extension_item(source: str, name: str) -> tuple[int, int] | None:
     start, end = block
     style, indent = _yaml_extension_layout(source, block)
     prefix = "- " if style == "sequence" else ""
-    header = re.escape(indent + prefix + name)
+    header = re.escape(indent + prefix) + _yaml_extension_name_pattern(name)
     if style == "sequence":
         pattern = rf"(?m)^{header}(?::[ \t]*(?:null|~|\{{\}})?)?[ \t]*$"
     else:

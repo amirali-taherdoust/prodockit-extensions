@@ -1488,6 +1488,51 @@ markdown_extensions:
     assert not (project / "zensical.toml").exists()
 
 
+@pytest.mark.parametrize(
+    "extension_key",
+    [
+        "pymdownx.blocks.caption",
+        '"pymdownx.blocks.caption"',
+        "'pymdownx.blocks.caption'",
+    ],
+)
+def test_yaml_mapping_extension_keys_preserve_existing_caption_settings(
+    tmp_path: Path, extension_key: str
+) -> None:
+    """Quoted and unquoted YAML keys name the same extension.
+
+    Adoption must update the existing mapping instead of appending a second
+    semantic key whose later value silently replaces the author's settings.
+    """
+    project = _project(
+        tmp_path,
+        f"""\
+site_name: Existing caption configuration
+markdown_extensions:
+  attr_list: {{}}
+  {extension_key}:
+    types:
+      - name: custom-caption
+        classes: custom-caption-class
+""",
+        config_name="mkdocs.yml",
+    )
+
+    path = ensure_zensical_config(project, AdoptOptions())
+
+    source = path.read_text(encoding="utf-8")
+    caption = load_project_config(path).markdown_extensions["pymdownx.blocks.caption"]
+    assert source.count("pymdownx.blocks.caption") == 1
+    assert {entry["name"] for entry in caption["types"]} == {
+        "custom-caption",
+        "caption",
+        "figure-caption",
+        "table-caption",
+    }
+    custom = next(entry for entry in caption["types"] if entry["name"] == "custom-caption")
+    assert custom["classes"] == "custom-caption-class"
+
+
 def test_zensical_yaml_preserves_python_tags_without_executing_them(tmp_path: Path) -> None:
     project = _project(
         tmp_path,
