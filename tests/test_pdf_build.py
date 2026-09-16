@@ -172,6 +172,43 @@ def test_multiple_pages_are_concatenated_in_order(tmp_path: Path, fake_pandoc_on
     assert compiled.index("Cover") < compiled.index("Chapter One") < compiled.index("Chapter Two")
 
 
+def test_build_namespaces_repeated_fragment_ids_and_their_links(
+    tmp_path: Path, fake_pandoc_on_path
+) -> None:
+    work_dir = tmp_path / "work"
+    fake_pandoc_on_path('echo "%PDF-1.4 stub" > "$3"')
+    build_pdf(
+        [
+            Page(
+                docs_rel_path="links.md",
+                html=(
+                    '<a href="../first#details">First details</a>'
+                    '<a href="../second#details">Second details</a>'
+                ),
+            ),
+            Page(
+                docs_rel_path="first.md",
+                html='<h1 id="first">First</h1><h2 id="details">Details</h2>',
+            ),
+            Page(
+                docs_rel_path="second.md",
+                html='<h1 id="second">Second</h1><h2 id="details">Details</h2>',
+            ),
+        ],
+        str(tmp_path / "out.pdf"),
+        include_table_of_contents=False,
+        work_dir=str(work_dir),
+        keep_work_dir=True,
+    )
+
+    compiled = (work_dir / "_prodockit_pdf_compiled.html").read_text(encoding="utf-8")
+    assert 'href="#page-first--details"' in compiled
+    assert 'href="#page-second--details"' in compiled
+    assert compiled.count('id="page-first--details"') == 1
+    assert compiled.count('id="page-second--details"') == 1
+    assert 'id="details"' not in compiled
+
+
 def test_repository_links_use_the_detected_remote_default_branch(
     tmp_path: Path, fake_pandoc_on_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

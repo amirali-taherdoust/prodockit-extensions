@@ -25,7 +25,11 @@ from html.parser import HTMLParser
 from typing import Any
 
 from prodockit.pdf.css import build_css, build_structural_guard_css
-from prodockit.pdf.html import build_page_anchor_map, fix_up_page_html
+from prodockit.pdf.html import (
+    build_fragment_anchor_map,
+    build_page_anchor_map,
+    fix_up_page_html,
+)
 from prodockit.pdf.index import (
     INDEX_CONTENT_ID,
     INDEX_TITLE_CLASS,
@@ -351,6 +355,9 @@ def build_pdf(
 
         announce(titles[0])
         page_anchor_map = build_page_anchor_map([page.docs_rel_path for page in pages])
+        fragment_anchor_map = build_fragment_anchor_map(
+            [(page.docs_rel_path, page.html) for page in pages], page_anchor_map
+        )
 
         # Every appendix page's letter, assigned here once by position in
         # `pages` - the same page-based rule the website's own lettering uses
@@ -382,6 +389,7 @@ def build_pdf(
                     project_root=project_root,
                     source_page_paths=source_page_paths,
                     page_anchor_map=page_anchor_map,
+                    fragment_anchor_map=fragment_anchor_map,
                     is_index=page.is_index,
                     is_appendix=page.is_appendix,
                     appendix_letter=appendix_letters.get(page.docs_rel_path, ""),

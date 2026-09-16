@@ -23,6 +23,7 @@ from __future__ import annotations
 import base64
 import os
 import re
+from collections import defaultdict
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -103,6 +104,37 @@ def build_virtual_page_map(md_files: list[str]) -> dict[str, str]:
     return virtual_map
 
 
+def _page_scoped_fragment(page_anchor: str, fragment: str) -> str:
+    """Make one website-page fragment unique in the combined PDF document."""
+    return f"{page_anchor}--{fragment}"
+
+
+def build_fragment_anchor_map(
+    pages: list[tuple[str, str]], page_anchor_map: dict[str, str]
+) -> dict[str, dict[str, str]]:
+    """Return page-scoped replacements only for ids repeated across pages.
+
+    Website pages have separate fragment namespaces; concatenating them into
+    one PDF does not. Unique ids stay unchanged, preserving authored CSS and
+    stable destinations, while each repeated id gains its page anchor prefix.
+    """
+    owners: dict[str, set[str]] = defaultdict(set)
+    for path, html in pages:
+        for element in BeautifulSoup(html, "html.parser").find_all(attrs={"id": True}):
+            owners[str(element["id"])].add(path)
+
+    replacements: dict[str, dict[str, str]] = {}
+    for fragment, paths in owners.items():
+        if len(paths) < 2:
+            continue
+        for path in paths:
+            if page_anchor := page_anchor_map.get(path):
+                replacements.setdefault(path, {})[fragment] = _page_scoped_fragment(
+                    page_anchor, fragment
+                )
+    return replacements
+
+
 def to_base64_data_uri(img_src: str, base_dir: str) -> str:
     """Resolves a (possibly relative) image src to an absolute path under
     base_dir and returns it as a base64 ``data:`` URI, so a standalone
@@ -168,6 +200,7 @@ def fix_up_page_html(
     project_root: str = ".",
     source_page_paths: list[str] | None = None,
     page_anchor_map: dict[str, str],
+    fragment_anchor_map: dict[str, dict[str, str]] | None = None,
     is_index: bool = False,
     is_appendix: bool = False,
     appendix_letter: str = "",
@@ -192,7 +225,8 @@ def fix_up_page_html(
     website links can point to the corresponding repository source.
     `page_anchor_map` is shared across every page in the build (see
     :func:`build_page_anchor_map`), used to rewrite cross-page links to
-    in-document anchors.
+    in-document anchors. `fragment_anchor_map` contains the page-scoped
+    replacements for fragment ids repeated across separate website pages.
 
     `is_index` marks this as the document's cover page - every heading on
     it is treated as decorative (unnumbered/unlisted/hidden), and its whole
@@ -509,6 +543,29 @@ def fix_up_page_html(
     # encoded to a data: URI *before* Pandoc sees it.
     #
 
+    # Website pages have separate fragment namespaces, but the PDF combines
+    # all of them into one document. Namespace only ids known to repeat across
+    # pages, then update same-page links to their replacement destinations.
+    current_fragments = (fragment_anchor_map or {}).get(current_docs_rel_path, {})
+    if current_fragments:
+        for element in soup.find_all(attrs={"id": True}):
+            original_id = str(element["id"])
+            replacement = current_fragments.get(original_id)
+            if replacement:
+                element["id"] = replacement
+                if element.get("name") == original_id:
+                    element["name"] = replacement
+        for element in soup.find_all("a", attrs={"name": True}):
+            original_name = str(element["name"])
+            if not element.get("id") and (replacement := current_fragments.get(original_name)):
+                element["name"] = replacement
+        for a in soup.find_all("a", href=True):
+            href = str(a["href"])
+            if href.startswith("#") and len(href) > 1:
+                fragment = unquote(href[1:])
+                if replacement := current_fragments.get(fragment):
+                    a["href"] = f"#{replacement}"
+
     # Cross-page links: a multi-page PDF concatenates every page into one
     # document, so a link like installtooling.md (fine on the website, a
     # separate page) has nothing to point at here - rewrite to the
@@ -517,7 +574,7 @@ def fix_up_page_html(
     # HTML, every such link (a regular markdown link, or a prodockit.refs/
     # prodockit.citations/prodockit.glossary cross-page link) already uses the
     # same clean-URL virtual-directory form.
-    virtual_page_map = {virtual_page_path(key): anchor for key, anchor in page_anchor_map.items()}
+    virtual_page_map = {virtual_page_path(key): key for key in page_anchor_map}
     for a in soup.find_all("a", href=True):
         href = a["href"]
         parts = urlsplit(href)
@@ -528,9 +585,12 @@ def fix_up_page_html(
             continue
         joined = os.path.normpath(os.path.join(current_virtual_dir, target))
         resolved = joined.replace("\\", "/").rstrip("/")
-        anchor = virtual_page_map.get(resolved)
-        if anchor is not None:
-            a["href"] = f"#{parts.fragment}" if parts.fragment else f"#{anchor}"
+        target_page = virtual_page_map.get(resolved)
+        if target_page is not None:
+            anchor = page_anchor_map[target_page]
+            fragment = unquote(parts.fragment)
+            replacement = (fragment_anchor_map or {}).get(target_page, {}).get(fragment, fragment)
+            a["href"] = f"#{replacement}" if parts.fragment else f"#{anchor}"
 
     # Pages omitted from the PDF still have clean website URLs. Recover
     # their source paths before falling back to repository-file links.

@@ -5,6 +5,7 @@ import pytest
 from bs4 import BeautifulSoup
 
 from prodockit.pdf.html import (
+    build_fragment_anchor_map,
     build_page_anchor_map,
     build_virtual_page_map,
     fix_up_page_html,
@@ -66,6 +67,21 @@ def test_build_page_anchor_map_reuses_an_anchor_for_a_repeated_source_path() -> 
     anchors = build_page_anchor_map(["guide.md", "guide.md"])
 
     assert anchors == {"guide.md": "page-guide"}
+
+
+def test_fragment_anchor_map_leaves_ids_unique_across_pages_unchanged() -> None:
+    page_anchors = build_page_anchor_map(["first.md", "second.md"])
+
+    assert (
+        build_fragment_anchor_map(
+            [
+                ("first.md", '<h1 id="first">First</h1>'),
+                ("second.md", '<h1 id="second">Second</h1>'),
+            ],
+            page_anchors,
+        )
+        == {}
+    )
 
 
 def test_build_virtual_page_map_keys_by_virtual_path() -> None:
@@ -319,7 +335,7 @@ def test_cross_page_link_resolves_to_an_in_document_anchor() -> None:
     assert 'href="#page-installtooling"' in html
 
 
-def test_cross_page_link_with_fragment_keeps_only_the_fragment() -> None:
+def test_cross_page_link_with_unique_fragment_keeps_only_the_fragment() -> None:
     anchor_map = build_page_anchor_map(["installtooling.md", "startediting.md"])
     html = _fix(
         '<a href="../installtooling#some-heading">Install tooling</a>',
@@ -327,6 +343,68 @@ def test_cross_page_link_with_fragment_keeps_only_the_fragment() -> None:
         page_anchor_map=anchor_map,
     )
     assert 'href="#some-heading"' in html
+
+
+def test_local_fragment_link_uses_its_own_page_namespace() -> None:
+    anchor_map = build_page_anchor_map(["first.md", "second.md"])
+    first_html = '<h1 id="first">First</h1><h2 id="details">Details</h2>'
+    second_html = (
+        '<h1 id="second">Second</h1><a href="#details">Details</a>'
+        '<h2 id="details">Details</h2>'
+    )
+    fragment_map = build_fragment_anchor_map(
+        [("first.md", first_html), ("second.md", second_html)], anchor_map
+    )
+    html = _fix(
+        second_html,
+        current_docs_rel_path="second.md",
+        page_anchor_map=anchor_map,
+        fragment_anchor_map=fragment_map,
+    )
+    soup = BeautifulSoup(html, "html.parser")
+
+    assert soup.find("a", string="Details")["href"] == "#page-second--details"
+    assert soup.find("h2")["id"] == "page-second--details"
+
+
+def test_repeated_heading_ids_remain_distinct_across_compiled_pages() -> None:
+    anchor_map = build_page_anchor_map(["first.md", "second.md", "links.md"])
+    first_html = '<h1 id="first">First</h1><h2 id="details">Details</h2>'
+    second_html = '<h1 id="second">Second</h1><h2 id="details">Details</h2>'
+    links_html = (
+        '<a href="../first#details">First details</a>'
+        '<a href="../second#details">Second details</a>'
+    )
+    fragment_map = build_fragment_anchor_map(
+        [("first.md", first_html), ("second.md", second_html), ("links.md", links_html)],
+        anchor_map,
+    )
+    links = _fix(
+        links_html,
+        current_docs_rel_path="links.md",
+        page_anchor_map=anchor_map,
+        fragment_anchor_map=fragment_map,
+    )
+    first = _fix(
+        first_html,
+        current_docs_rel_path="first.md",
+        page_anchor_map=anchor_map,
+        fragment_anchor_map=fragment_map,
+    )
+    second = _fix(
+        second_html,
+        current_docs_rel_path="second.md",
+        page_anchor_map=anchor_map,
+        fragment_anchor_map=fragment_map,
+    )
+
+    link_soup = BeautifulSoup(links, "html.parser")
+    assert [link["href"] for link in link_soup.find_all("a")] == [
+        "#page-first--details",
+        "#page-second--details",
+    ]
+    assert BeautifulSoup(first, "html.parser").find("h2")["id"] == "page-first--details"
+    assert BeautifulSoup(second, "html.parser").find("h2")["id"] == "page-second--details"
 
 
 def test_colliding_page_slugs_rewrite_to_distinct_anchors() -> None:
