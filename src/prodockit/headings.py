@@ -18,6 +18,7 @@ from markdown import Markdown
 from markdown.extensions import Extension
 from markdown.extensions.toc import TocExtension
 from markdown.treeprocessors import Treeprocessor
+from markdown.util import HTML_PLACEHOLDER_RE
 
 from prodockit._markdown_toc import MarkdownTocAPIError, toc_slugging
 from prodockit._zensical import (
@@ -341,7 +342,11 @@ class HeadingsTreeprocessor(Treeprocessor):
                 continue
             if el.tag not in HEADING_TAGS:
                 continue
-            text = "".join(_heading_text(el))
+            # Raw inline HTML is still represented by page-local stash
+            # placeholders at treeprocessor time. Never store those tokens in
+            # the shared cross-page registry: another page can reuse the same
+            # numeric slots for unrelated tags when refs are resolved.
+            text = HTML_PLACEHOLDER_RE.sub("", "".join(_heading_text(el)))
             heading_id = el.get("id")
             if not heading_id:
                 heading_id = _slugify(text)

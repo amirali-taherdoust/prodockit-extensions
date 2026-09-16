@@ -103,6 +103,12 @@ def test_scan_page_headings_recognises_setext_levels_and_attributes() -> None:
     ]
 
 
+def test_scan_page_headings_preserves_markdown_autolink_text() -> None:
+    assert _scan_page_headings("## Visit <https://example.com>\n") == [
+        (2, "Visit https://example.com", None, False)
+    ]
+
+
 def test_front_matter_flag_is_case_insensitive() -> None:
     text = "---\nis_appendix: TRUE\n---\n\n# Heading\n"
     assert _front_matter_flag(text, "is_appendix") is True

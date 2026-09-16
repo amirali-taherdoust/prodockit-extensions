@@ -22,6 +22,7 @@ import re
 import subprocess
 import warnings
 from collections.abc import Callable
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Protocol, TypeVar
 
@@ -416,7 +417,29 @@ def _heading_display_text(raw: str) -> str:
     has parsed it - by unwrapping links and dropping emphasis/code markers.
     Best-effort: it only has to be good enough to slugify a heading that
     has no explicit ``{: #id }`` of its own."""
-    return _INLINE_MARKUP_RE.sub(lambda m: m.group(1) or "", raw).strip()
+    class TextOnlyParser(HTMLParser):
+        def __init__(self) -> None:
+            super().__init__(convert_charrefs=True)
+            self.parts: list[str] = []
+
+        def handle_data(self, data: str) -> None:
+            self.parts.append(data)
+
+        def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+            # Python-Markdown autolinks look tag-like to HTMLParser. Keep
+            # their visible destination while dropping ordinary inline tags.
+            source = self.get_starttag_text()
+            candidate = source[1:-1] if source is not None else ""
+            if re.fullmatch(r"(?:https?://|mailto:)\S+", candidate) or re.fullmatch(
+                r"[^\s<>@]+@[^\s<>@]+", candidate
+            ):
+                self.parts.append(candidate.removeprefix("mailto:"))
+
+    parser = TextOnlyParser()
+    parser.feed(raw)
+    parser.close()
+    text = "".join(parser.parts)
+    return _INLINE_MARKUP_RE.sub(lambda m: m.group(1) or "", text).strip()
 
 
 def _heading_details(
