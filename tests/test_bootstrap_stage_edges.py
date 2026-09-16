@@ -20,7 +20,7 @@ from bootstrap_cli_harness import CliFakeRunner, unreachable
 
 import prodockit.bootstrap.stages as stages
 from prodockit import mathjax
-from prodockit.bootstrap import BootstrapConfig, CommandResult, Status, build_context
+from prodockit.bootstrap import BootstrapConfig, CommandResult, Status, build_context, plan_all
 from prodockit.bootstrap.model import MACOS, UBUNTU, WINDOWS
 
 
@@ -687,12 +687,61 @@ def test_windows_pango_matches_the_python_process_architecture(
     assert "PROCESSOR_ARCHITEW6432" not in rendered
 
 
-def test_first_push_reports_an_unreachable_origin(tmp_path: Path) -> None:
+def _write_usable_github_keypair(tmp_path: Path) -> None:
+    ssh = tmp_path / ".ssh"
+    ssh.mkdir()
+    (ssh / "id_ed25519_github").write_text("private", encoding="utf-8")
+    (ssh / "id_ed25519_github.pub").write_text("public", encoding="utf-8")
+
+
+def _ready_github_ssh() -> dict[str, CommandResult]:
+    return {
+        "ssh-keygen -lf": CommandResult(
+            0, "256 SHA256:test ada@example.test (ED25519)"
+        ),
+        "ssh-add -l": CommandResult(
+            0, "256 SHA256:test ada@example.test (ED25519)"
+        ),
+        "ssh": CommandResult(1, stderr="Hi ada! You've successfully authenticated"),
+    }
+
+
+def test_first_push_waits_for_the_ssh_agent_when_the_remote_cannot_be_inspected(
+    tmp_path: Path,
+) -> None:
     (tmp_path / "report" / ".git").mkdir(parents=True)
+    _write_usable_github_keypair(tmp_path)
     runner = CliFakeRunner(
         {
             "remote get-url origin": CommandResult(0, "git@github.com:ada/report.git"),
             "status --porcelain": CommandResult(0, ""),
+            **_ready_github_ssh(),
+            "ssh-add -l": CommandResult(
+                2, stderr="Could not open a connection to your authentication agent."
+            ),
+            "ls-remote origin HEAD": CommandResult(1, stderr="offline"),
+        }
+    )
+    stage = next(stage for stage in stages.STAGES if stage.id == "first-push")
+
+    report = plan_all(_context(tmp_path, runner=runner), (stage,))[0]
+
+    assert report.result.status is Status.BLOCKED
+    assert "SSH" in report.result.detail
+    assert "agent" in report.result.detail
+    assert report.plan is None
+
+
+def test_first_push_reports_an_unreachable_origin_after_ssh_is_ready(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "report" / ".git").mkdir(parents=True)
+    _write_usable_github_keypair(tmp_path)
+    runner = CliFakeRunner(
+        {
+            "remote get-url origin": CommandResult(0, "git@github.com:ada/report.git"),
+            "status --porcelain": CommandResult(0, ""),
+            **_ready_github_ssh(),
             "ls-remote origin HEAD": CommandResult(1, stderr="offline"),
         }
     )
@@ -705,10 +754,12 @@ def test_first_push_reports_an_unreachable_origin(tmp_path: Path) -> None:
 
 def test_first_push_reports_a_remote_commit_without_a_local_commit(tmp_path: Path) -> None:
     (tmp_path / "report" / ".git").mkdir(parents=True)
+    _write_usable_github_keypair(tmp_path)
     runner = CliFakeRunner(
         {
             "remote get-url origin": CommandResult(0, "git@github.com:ada/report.git"),
             "status --porcelain": CommandResult(0, ""),
+            **_ready_github_ssh(),
             "ls-remote origin HEAD": CommandResult(0, "abc123\tHEAD"),
             "rev-parse HEAD": CommandResult(1, stderr="no commit"),
         }
