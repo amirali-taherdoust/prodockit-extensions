@@ -85,6 +85,7 @@ def test_component_acceptance_and_workflow_files_select_their_own_matrix() -> No
         ("src/prodockit/template_sync.py", "adopt"),
         ("src/prodockit/template_prerequisites.py", "adopt"),
         ("tools/pdf_from_site_acceptance.py", "pdf"),
+        ("tools/verify_mermaid_provenance.py", "pdf"),
         ("tools/bootstrap_acceptance.py", "bootstrap"),
         ("tools/bootstrap_live_provider_read_only.py", "bootstrap"),
         ("tools/bootstrap_live_provider_read_write.py", "bootstrap"),
@@ -334,6 +335,19 @@ def test_real_upgrade_workflow_caches_validated_old_software() -> None:
     assert "uses: actions/cache@v4" in native_upgrade
     assert "PDK_NATIVE_DOWNLOAD_CACHE:" in native_upgrade
     assert "hashFiles('tools/bootstrap_native_upgrade.py')" in native_upgrade
+
+
+def test_standalone_pdf_wheel_matrix_uses_only_published_quickjs_architectures() -> None:
+    workflow = (ROOT / ".github" / "workflows" / "pdf-built-site-wheel.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "runner: ubuntu-24.04" in workflow
+    assert "runner: ubuntu-24.04-arm" in workflow
+    assert "runner: windows-2025" in workflow
+    assert "runner: macos-15" in workflow
+    assert "runner: windows-11-arm" not in workflow
+    assert "runner: macos-15-intel" not in workflow
 
 
 def test_uncertain_release_detection_fails_closed() -> None:

@@ -92,6 +92,12 @@ however:
 Platforms and test depth
 ///
 
+The standalone Mermaid `--swap` backend is supported on Linux x64 and ARM64,
+Windows x64, and macOS ARM64. Windows ARM64 and macOS Intel x64 remain supported
+for ordinary ProDockit use, but not for `--swap`, because the audited
+`quickjs-ng` version does not publish compatible wheels and normal installation
+must not compile or download another runtime.
+
 \ref{tab-about-support-platforms-and-test-depth} distinguishes automated
 regression coverage from manual bootstrap exercises. The installed-wheel
 adoption and bootstrap jobs build the candidate package afresh. Adoption tests
