@@ -4891,6 +4891,10 @@ def _check_first_push(context: Context) -> CheckResult:
         [git_command(context), "-C", str(project), "ls-remote", "origin", "HEAD"]
     )
     if not remote.ok:
+        if context.guided:
+            ssh_access = _check_ssh_authenticates(context)
+            if ssh_access.needs_work:
+                return _blocked(f"SSH access is not ready yet - {ssh_access.detail}")
         return _wrong("could not reach origin to see what is there")
     if not remote.stdout.strip():
         # Committed here, empty there. Either the push has not been run
