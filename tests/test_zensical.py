@@ -18,6 +18,7 @@ import prodockit._zensical_page_context as page_context
 from prodockit._zensical import (
     _count_top_level_headings,
     _front_matter_flag,
+    _scan_page_headings,
     nav_signature,
     prescan_headings,
     preseed_attr_from_nav,
@@ -86,6 +87,20 @@ def test_front_matter_flag_false_when_absent() -> None:
 
 def test_front_matter_flag_false_without_front_matter() -> None:
     assert _front_matter_flag("# Heading\n", "is_appendix") is False
+
+
+def test_scan_page_headings_recognises_setext_levels_and_attributes() -> None:
+    text = (
+        "Document title {: #cover .unnumbered }\n"
+        "=======================================\n\n"
+        "Section title {: id=custom-section }\n"
+        "--------------------------------------\n"
+    )
+
+    assert _scan_page_headings(text) == [
+        (1, "Document title", "cover", True),
+        (2, "Section title", "custom-section", False),
+    ]
 
 
 def test_front_matter_flag_is_case_insensitive() -> None:

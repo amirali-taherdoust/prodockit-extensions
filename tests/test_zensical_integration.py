@@ -546,6 +546,55 @@ def test_forward_reference_resolves_long_form_attr_list_heading_id(
     )
 
 
+def test_forward_reference_resolves_setext_heading(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A later page's Setext heading must be preseeded just like ATX syntax."""
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    (docs_dir / "source.md").write_text("# Source\n", encoding="utf-8")
+    (docs_dir / "target.md").write_text(
+        "Setext target\n-------------\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        prodockit_zensical,
+        "nav_pages",
+        lambda: (str(docs_dir), ["source.md", "target.md"]),
+    )
+
+    html = _convert_as_zensical_page(
+        "# Source\n\nSee \\ref{setext-target}.\n",
+        "source.md",
+    )
+
+    assert '<a class="prodockit-ref" href="target.md#setext-target">1.1 Setext target</a>' in html
+
+
+def test_multiline_paragraph_before_rule_is_not_preseeded_as_setext_heading(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Only a single-line paragraph followed by an underline is Setext."""
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    (docs_dir / "target.md").write_text(
+        "First line\nSecond line\n-------------\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        prodockit_zensical,
+        "nav_pages",
+        lambda: (str(docs_dir), ["target.md"]),
+    )
+
+    html = _convert_as_zensical_page(
+        "See \\ref{second-line}.\n",
+        "source.md",
+    )
+
+    assert '<a class="prodockit-ref prodockit-ref-unresolved">??</a>' in html
+
+
 def test_long_form_attr_list_heading_id_does_not_preseed_generated_slug(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
