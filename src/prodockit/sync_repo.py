@@ -29,6 +29,7 @@ branch and matched by host *kind*, which covers the self-hosted case too.
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 from collections.abc import Callable, MutableMapping
@@ -99,15 +100,8 @@ def get_remote_url(remote: str = "origin", *, cwd: str | None = None) -> str:
     return result.stdout.strip()
 
 
-def detect_default_branch(remote: str = "origin", *, cwd: str | None = None) -> str:
-    """The remote's own default branch, falling back to `"main"`.
-
-    Read from the local `refs/remotes/<remote>/HEAD` symbolic ref, which a
-    normal clone sets up. A checkout without it (a bare `git init` plus a
-    manually added remote, or a fetch that never resolved HEAD) simply gets
-    the fallback rather than an error - `edit_uri` pointing at `main` is a
-    far better failure mode than the build stopping.
-    """
+def _local_default_branch(remote: str = "origin", *, cwd: str | None = None) -> str | None:
+    """The branch cached in ``refs/remotes/<remote>/HEAD``, if present."""
     try:
         result = subprocess.run(
             [find("git"), "symbolic-ref", "--short", f"refs/remotes/{remote}/HEAD"],
@@ -118,9 +112,81 @@ def detect_default_branch(remote: str = "origin", *, cwd: str | None = None) -> 
             cwd=cwd,
         )
     except (subprocess.CalledProcessError, OSError):
-        return "main"
+        return None
     ref = result.stdout.strip()
-    return ref.split("/", 1)[1] if "/" in ref else (ref or "main")
+    return ref.split("/", 1)[1] if "/" in ref else (ref or None)
+
+
+def detect_default_branch(remote: str = "origin", *, cwd: str | None = None) -> str:
+    """The locally cached default branch, falling back to ``main``.
+
+    A normal clone records this as ``refs/remotes/<remote>/HEAD``. A
+    checkout without that ref gets the fallback rather than an error.
+    """
+    return _local_default_branch(remote, cwd=cwd) or "main"
+
+
+def detect_remote_default_branch(
+    remote: str,
+    *,
+    cwd: str | None = None,
+    timeout: int = 10,
+) -> str:
+    """Ask ``remote`` which branch its ``HEAD`` advertises.
+
+    A normal clone's cached ``origin/HEAD`` avoids an unnecessary network
+    request. If that ref is absent, ask the configured repository itself.
+    A host failure falls back to ``main`` so an offline PDF build is not
+    blocked.
+    """
+    try:
+        origin_url = get_remote_url(cwd=cwd)
+    except SyncRepoError:
+        origin_url = ""
+    if (
+        origin_url
+        and _same_repository(remote, origin_url)
+        and (local_branch := _local_default_branch(cwd=cwd))
+    ):
+        return local_branch
+
+    env = os.environ.copy()
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    try:
+        result = subprocess.run(
+            [find("git"), "ls-remote", "--symref", remote, "HEAD"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=True,
+            cwd=cwd,
+            timeout=timeout,
+            env=env,
+        )
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
+        return "main"
+
+    for line in result.stdout.splitlines():
+        fields = line.split()
+        if len(fields) >= 3 and fields[0] == "ref:" and fields[-1] == "HEAD":
+            prefix = "refs/heads/"
+            if fields[1].startswith(prefix):
+                return fields[1][len(prefix) :]
+    return "main"
+
+
+def _same_repository(left: str, right: str) -> bool:
+    """Whether two supported Git URL spellings identify one repository."""
+    try:
+        left_parts = parse_remote(left)
+        right_parts = parse_remote(right)
+    except SyncRepoError:
+        normalised_left = left.rstrip("/").removesuffix(".git").lower()
+        normalised_right = right.rstrip("/").removesuffix(".git").lower()
+        return normalised_left == normalised_right
+    return tuple(part.lower() for part in left_parts) == tuple(
+        part.lower() for part in right_parts
+    )
 
 
 def parse_remote(url: str) -> tuple[str, str, str]:

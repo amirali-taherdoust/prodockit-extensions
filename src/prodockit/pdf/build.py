@@ -35,6 +35,7 @@ from prodockit.pdf.index import (
     render_index_content,
 )
 from prodockit.pdf.lua import build_lua_filter
+from prodockit.sync_repo import detect_remote_default_branch
 
 
 @dataclass
@@ -365,6 +366,13 @@ def build_pdf(
         for index, appendix_page in enumerate(page for page in pages if page.is_appendix):
             appendix_letters[appendix_page.docs_rel_path] = chr(ord("A") + index)
 
+        repo_url_lower = repo_url.lower()
+        repo_branch = (
+            detect_remote_default_branch(repo_url, cwd=project_root)
+            if "github.com" in repo_url_lower or "gitlab" in repo_url_lower
+            else "main"
+        )
+
         fixed_html_parts = []
         for page in pages:
             fixed_html_parts.append(
@@ -381,6 +389,7 @@ def build_pdf(
                     recto_title=page.recto_title,
                     revision_date=page.revision_date,
                     repo_url=repo_url,
+                    repo_branch=repo_branch,
                     admonition_icon_config=admonition_icon_config,
                     icon_registry=icon_registry,
                     render_mermaid=render_mermaid,

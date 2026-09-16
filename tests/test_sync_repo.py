@@ -15,6 +15,7 @@ from prodockit.sync_repo import (
     SyncRepoError,
     badges_for_host,
     detect_default_branch,
+    detect_remote_default_branch,
     edit_uri_for_host,
     icon_for_host,
     parse_remote,
@@ -691,6 +692,65 @@ def test_detect_default_branch_falls_back_without_a_remote_head(tmp_path: Path) 
     error - a wrong edit_uri is a better failure than a stopped build."""
     subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
     assert detect_default_branch(cwd=str(tmp_path)) == "main"
+
+
+def test_detect_remote_default_branch_reads_the_advertised_head(monkeypatch) -> None:
+    def run(command, **_kwargs):
+        if command[1:3] == ["remote", "get-url"]:
+            raise subprocess.CalledProcessError(1, command)
+        assert command[1:] == [
+            "ls-remote",
+            "--symref",
+            "https://github.com/octocat/Hello-World",
+            "HEAD",
+        ]
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            "ref: refs/heads/master\tHEAD\nabc123\tHEAD\n",
+            "",
+        )
+
+    monkeypatch.setattr("prodockit.sync_repo.subprocess.run", run)
+
+    assert (
+        detect_remote_default_branch("https://github.com/octocat/Hello-World") == "master"
+    )
+
+
+def test_detect_remote_default_branch_falls_back_when_the_host_is_unavailable(
+    monkeypatch,
+) -> None:
+    def run(command, **_kwargs):
+        if command[1:3] == ["remote", "get-url"]:
+            raise subprocess.CalledProcessError(1, command)
+        if command[1] == "ls-remote":
+            raise subprocess.TimeoutExpired(command, 10)
+        raise AssertionError(f"unexpected command: {command}")
+
+    monkeypatch.setattr("prodockit.sync_repo.subprocess.run", run)
+
+    assert detect_remote_default_branch("https://gitlab.example/group/repo") == "main"
+
+
+def test_detect_remote_default_branch_reuses_a_matching_local_origin(monkeypatch) -> None:
+    commands = []
+
+    def run(command, **_kwargs):
+        commands.append(command[1:])
+        if command[1:3] == ["remote", "get-url"]:
+            return subprocess.CompletedProcess(
+                command, 0, "https://github.com/example/repo.git\n", ""
+            )
+        if command[1] == "symbolic-ref":
+            return subprocess.CompletedProcess(command, 0, "origin/develop\n", "")
+        raise AssertionError(f"the matching remote must not be queried: {command}")
+
+    monkeypatch.setattr("prodockit.sync_repo.subprocess.run", run)
+
+    assert detect_remote_default_branch("https://github.com/example/repo") == "develop"
+    assert ["remote", "get-url", "origin"] in commands
+    assert not any(command[0] == "ls-remote" for command in commands)
 
 
 def test_a_documentation_badge_links_to_the_published_site() -> None:
