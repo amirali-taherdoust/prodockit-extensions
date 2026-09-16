@@ -174,6 +174,7 @@ def fix_up_page_html(
     recto_title: str | None = None,
     revision_date: str | None = None,
     repo_url: str = "",
+    repo_branch: str = "main",
     admonition_icon_config: dict[str, Any] | None = None,
     icon_registry: dict[str, str] | None = None,
     render_mermaid: Callable[[str], str | None] | None = None,
@@ -186,8 +187,9 @@ def fix_up_page_html(
     ``"starthere/installtooling.md"``) - used to resolve this page's own
     relative image/link references and its own anchor id.
     `project_root` anchors repository file URLs independently of the working
-    directory. `source_page_paths` also includes pages omitted from the PDF,
-    so their website links can point to the corresponding repository source.
+    directory. `repo_branch` identifies the revision used by those URLs.
+    `source_page_paths` also includes pages omitted from the PDF, so their
+    website links can point to the corresponding repository source.
     `page_anchor_map` is shared across every page in the build (see
     :func:`build_page_anchor_map`), used to rewrite cross-page links to
     in-document anchors.
@@ -537,10 +539,11 @@ def fix_up_page_html(
     source_docs = (root / docs_dir).resolve()
     current_dir = os.path.dirname(current_docs_rel_path)
     repo_url_lower = repo_url.lower()
+    default_branch = quote(repo_branch, safe="/")
     if "github.com" in repo_url_lower:
-        blob_prefix: str | None = f"{repo_url.rstrip('/')}/blob/main/"
+        blob_prefix: str | None = f"{repo_url.rstrip('/')}/blob/{default_branch}/"
     elif "gitlab" in repo_url_lower:
-        blob_prefix = f"{repo_url.rstrip('/')}/-/blob/main/"
+        blob_prefix = f"{repo_url.rstrip('/')}/-/blob/{default_branch}/"
     else:
         blob_prefix = None
     for a in soup.find_all("a", href=True):

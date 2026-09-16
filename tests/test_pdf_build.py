@@ -172,6 +172,31 @@ def test_multiple_pages_are_concatenated_in_order(tmp_path: Path, fake_pandoc_on
     assert compiled.index("Cover") < compiled.index("Chapter One") < compiled.index("Chapter Two")
 
 
+def test_repository_links_use_the_detected_remote_default_branch(
+    tmp_path: Path, fake_pandoc_on_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake_pandoc_on_path('echo "%PDF-1.4 stub" > "$3"')
+    monkeypatch.setattr(
+        "prodockit.pdf.build.detect_remote_default_branch",
+        lambda remote, **_kwargs: "master",
+    )
+    work_dir = tmp_path / "work"
+
+    build_pdf(
+        [Page(docs_rel_path="index.md", html='<a href="../README">README</a>')],
+        str(tmp_path / "out.pdf"),
+        docs_dir="docs",
+        project_root=str(tmp_path),
+        repo_url="https://github.com/octocat/Hello-World",
+        include_table_of_contents=False,
+        work_dir=str(work_dir),
+        keep_work_dir=True,
+    )
+
+    compiled = (work_dir / "_prodockit_pdf_compiled.html").read_text(encoding="utf-8")
+    assert "https://github.com/octocat/Hello-World/blob/master/README" in compiled
+
+
 def test_table_of_contents_is_inserted_after_the_cover_page_by_default(tmp_path: Path, fake_pandoc_on_path) -> None:
     work_dir = tmp_path / "work"
     fake_pandoc_on_path('echo "%PDF-1.4 stub" > "$3"')

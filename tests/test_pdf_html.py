@@ -365,6 +365,51 @@ def test_repo_file_link_rewrites_to_a_gitlab_blob_url() -> None:
     assert "/-/blob/main/" in html
 
 
+@pytest.mark.parametrize(
+    ("repo_url", "expected_href"),
+    [
+        (
+            "https://github.com/example/repo",
+            "https://github.com/example/repo/blob/master/docs/stylesheets/extra.css",
+        ),
+        (
+            "https://gitlab.com/example/repo",
+            "https://gitlab.com/example/repo/-/blob/master/docs/stylesheets/extra.css",
+        ),
+    ],
+)
+def test_repo_file_link_uses_the_remote_default_branch(
+    repo_url: str, expected_href: str
+) -> None:
+    html = _fix(
+        '<a href="../stylesheets/extra.css">extra.css</a>',
+        current_docs_rel_path="starthere/customise.md",
+        repo_url=repo_url,
+        repo_branch="master",
+    )
+
+    assert BeautifulSoup(html, "html.parser").a["href"] == expected_href
+
+
+@pytest.mark.parametrize(
+    ("repo_url", "expected_fragment"),
+    [
+        ("https://github.com/example/repo", "/blob/main/"),
+        ("https://gitlab.com/example/repo", "/-/blob/main/"),
+    ],
+)
+def test_repo_file_link_falls_back_to_main_without_remote_head(
+    repo_url: str, expected_fragment: str
+) -> None:
+    html = _fix(
+        '<a href="../stylesheets/extra.css">extra.css</a>',
+        current_docs_rel_path="starthere/customise.md",
+        repo_url=repo_url,
+    )
+
+    assert expected_fragment in BeautifulSoup(html, "html.parser").a["href"]
+
+
 def test_repo_file_link_is_unwrapped_when_no_repo_url_is_known() -> None:
     html = _fix('<a href="../stylesheets/extra.css">extra.css</a>', current_docs_rel_path="starthere/customise.md")
     assert "<a " not in html
