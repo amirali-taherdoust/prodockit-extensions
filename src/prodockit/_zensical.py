@@ -383,6 +383,8 @@ def prescan_headings(appendix_attr: str) -> tuple[dict[str, int], dict[str, str]
 
 
 _HEADING_LINE_RE = re.compile(r"^(#{1,6})\s+(\S.*?)\s*$")
+_SETEXT_UNDERLINE_RE = re.compile(r"^ {0,3}(?P<marker>=+|-+)[ \t]*$")
+_SETEXT_TEXT_RE = re.compile(r"^ {0,3}(?P<text>\S.*?)\s*$")
 _TRAILING_ATTR_RE = re.compile(r"\s*\{:\s*([^}]*?)\s*\}\s*$")
 _INLINE_MARKUP_RE = re.compile(r"\[([^\]]*)\]\([^)]*\)|[*_`~]")
 _CAPTION_OPEN_RE = re.compile(
@@ -415,6 +417,42 @@ def _heading_display_text(raw: str) -> str:
     Best-effort: it only has to be good enough to slugify a heading that
     has no explicit ``{: #id }`` of its own."""
     return _INLINE_MARKUP_RE.sub(lambda m: m.group(1) or "", raw).strip()
+
+
+def _heading_details(
+    raw: str, *, strip_closing_hashes: bool = False
+) -> tuple[str, str | None, bool]:
+    """Extract the display text and attr-list metadata from a heading."""
+    explicit_id: str | None = None
+    unnumbered = False
+    if attr_match := _TRAILING_ATTR_RE.search(raw):
+        parsed_attrs, _ = get_attrs_and_remainder(attr_match.group(1))
+        for name, value in parsed_attrs:
+            if name == "id":
+                explicit_id = value
+        unnumbered = any(name == "." and value == "unnumbered" for name, value in parsed_attrs)
+        raw = raw[: attr_match.start()]
+    if strip_closing_hashes:
+        raw = re.sub(r"\s+#+\s*$", "", raw)
+    return _heading_display_text(raw), explicit_id, unnumbered
+
+
+def _setext_starts_block(lines: list[str], index: int) -> bool:
+    """Whether a candidate text line starts its own Markdown block.
+
+    A Setext heading is a single-line paragraph followed by an underline.
+    Without this boundary check, the final line of a multi-line paragraph
+    would be misclassified even though Python-Markdown renders the underline
+    as a thematic break.
+    """
+    if index == 0 or not lines[index - 1].strip():
+        return True
+    previous = lines[index - 1].strip()
+    return bool(
+        _HEADING_LINE_RE.match(lines[index - 1])
+        or previous.endswith("-->")
+        or previous.startswith("///")
+    )
 
 
 def _caption_id(argument: str, body: list[str]) -> str | None:
@@ -543,30 +581,27 @@ def _scan_page_numberables(
 
         match = _HEADING_LINE_RE.match(line)
         if match is not None:
-            level = len(match.group(1))
-            rest = match.group(2)
-            explicit_id: str | None = None
-            unnumbered = False
-            if attr_match := _TRAILING_ATTR_RE.search(rest):
-                attrs = attr_match.group(1)
-                parsed_attrs, _ = get_attrs_and_remainder(attrs)
-                for name, value in parsed_attrs:
-                    if name == "id":
-                        explicit_id = value
-                unnumbered = any(
-                    name == "." and value == "unnumbered"
-                    for name, value in parsed_attrs
-                )
-                rest = rest[: attr_match.start()]
-            rest = re.sub(r"\s+#+\s*$", "", rest)
-            items.append(("heading", level, _heading_display_text(rest), explicit_id, unnumbered))
+            display_text, explicit_id, unnumbered = _heading_details(
+                match.group(2), strip_closing_hashes=True
+            )
+            items.append(("heading", len(match.group(1)), display_text, explicit_id, unnumbered))
+        elif (
+            index + 1 < len(lines)
+            and (text_match := _SETEXT_TEXT_RE.match(line)) is not None
+            and (underline_match := _SETEXT_UNDERLINE_RE.match(lines[index + 1])) is not None
+            and _setext_starts_block(lines, index)
+        ):
+            display_text, explicit_id, unnumbered = _heading_details(text_match.group("text"))
+            level = 1 if underline_match.group("marker").startswith("=") else 2
+            items.append(("heading", level, display_text, explicit_id, unnumbered))
+            index += 1
         index += 1
     return items
 
 
 def _scan_page_headings(text: str) -> list[tuple[int, str, str | None, bool]]:
     """Returns ``(level, display_text, explicit_id, unnumbered)`` for every
-    ATX heading in one page's raw markdown, in document order - skipping
+    ATX or Setext heading in one page's raw markdown, in document order - skipping
     fenced code blocks and HTML comments, the same way
     _count_top_level_headings() does, so a heading shown as a literal
     example isn't mistaken for a real one."""
