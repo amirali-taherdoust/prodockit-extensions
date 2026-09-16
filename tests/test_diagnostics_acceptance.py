@@ -249,7 +249,7 @@ def test_all_failures_fixture_contains_every_repair_shape(
     assert "\\ref{target}" in (project / "docs/index.md").read_text(encoding="utf-8")
     assert (project / "docs/stylesheets/pdk.css").is_file()
     assert not (project / "docs/stylesheets/pdk-pdf.css").exists()
-    for component in ("mermaid", "mathjax"):
+    for component in ("mathjax",):
         assert (project / "tools" / component / "package.json").is_file()
         assert (project / "tools" / component / "package-lock.json").is_file()
         assert not (project / "tools" / component / "node_modules").exists()
@@ -294,19 +294,19 @@ def test_online_update_notice_does_not_make_a_successful_pin_repair_fail() -> No
     assert not diagnostics_acceptance_driver._repair_cleared("dependencies.pins", check)
 
 
-def test_diagnostic_repair_workflow_has_six_repair_and_twelve_toolchain_environments() -> None:
+def test_diagnostic_repair_workflow_has_five_repair_and_ten_toolchain_environments() -> None:
     workflow = (ROOT / ".github/workflows/diag-repair.yml").read_text(encoding="utf-8")
     runners = {
         "ubuntu-24.04",
         "ubuntu-24.04-arm",
         "windows-2025",
-        "windows-11-arm",
         "macos-15-intel",
         "macos-15",
     }
 
-    assert sum(f"runner: {runner}" in workflow for runner in runners) == 6
-    assert workflow.count("architecture_check:") == 12
+    assert sum(f"runner: {runner}" in workflow for runner in runners) == 5
+    assert workflow.count("architecture_check:") == 10
+    assert "windows-11-arm" not in workflow
     assert "scenario: [upgrade, downgrade]" in workflow
     assert "python -m build --wheel" in workflow
     assert "tools/diagnostics_repair_acceptance.py" in workflow
@@ -315,14 +315,13 @@ def test_diagnostic_repair_workflow_has_six_repair_and_twelve_toolchain_environm
     assert 'pip install -e ".[dev]"' not in workflow
 
 
-def test_acceptance_requires_all_six_repairable_checks_and_seven_confirmations() -> None:
+def test_acceptance_requires_all_five_repairable_checks_and_six_confirmations() -> None:
     assert {
         "installation.metadata",
         "project.configuration",
         "dependencies.pins",
         "dependencies.shared-files",
-        "renderer.mermaid",
         "renderer.mathjax",
     } == diagnostics_acceptance_driver.REPAIRABLE_CHECKS
-    assert sum(diagnostics_acceptance_driver.EXPECTED_ACTIONS.values()) == 7
+    assert sum(diagnostics_acceptance_driver.EXPECTED_ACTIONS.values()) == 6
     assert diagnostics_acceptance_driver.EXPECTED_ACTIONS["dependencies.shared-files"] == 2

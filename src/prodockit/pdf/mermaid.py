@@ -25,6 +25,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Protocol
 
+from prodockit.renderer_health import find_browser, renderer_command
+
 from ._standalone_quickjs import (
     StandaloneBackendUnavailableError as StandaloneRuntimeUnavailableError,
 )
@@ -67,9 +69,9 @@ def render_mermaid_diagram(
     diagram can't fail an entire build).
 
     `mmdc_bin` is the caller's resolved path to mermaid-cli's own `mmdc`
-    executable (e.g. under a local ``tools/mermaid/node_modules/.bin/mmdc``
-    install) - not discovered here, since where a project chooses to
-    install mermaid-cli is a caller concern, not this package's.
+    executable supplied by the caller or found on ``PATH``. It is not
+    discovered here because installing mermaid-cli is a caller concern,
+    not this package's.
 
     `index` distinguishes this diagram's own working files
     (``diagram_{index}.mmd``/``.svg``) from any other diagram rendered into
@@ -91,19 +93,22 @@ def render_mermaid_diagram(
         f.write(diagram_source)
     with open(mmdc_config_path, "w", encoding="utf-8") as f:
         json.dump(_MERMAID_CONFIG, f)
+    puppeteer_config = dict(_PUPPETEER_CONFIG)
+    if browser := find_browser():
+        puppeteer_config["executablePath"] = browser
     with open(puppeteer_config_path, "w", encoding="utf-8") as f:
-        json.dump(_PUPPETEER_CONFIG, f)
+        json.dump(puppeteer_config, f)
 
     try:
         subprocess.run(
-            [
-                mmdc_bin,
+            renderer_command(
+                Path(mmdc_bin),
                 "-i", mmd_path,
                 "-o", svg_path,
                 "-b", "transparent",
                 "-c", mmdc_config_path,
                 "-p", puppeteer_config_path,
-            ],
+            ),
             check=True,
             capture_output=True,
             text=True,

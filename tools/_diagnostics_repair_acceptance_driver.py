@@ -30,7 +30,6 @@ REPAIRABLE_CHECKS = frozenset(
         "project.configuration",
         "dependencies.pins",
         "dependencies.shared-files",
-        "renderer.mermaid",
         "renderer.mathjax",
     }
 )
@@ -40,7 +39,6 @@ EXPECTED_ACTIONS = Counter(
         "project.configuration": 1,
         "dependencies.pins": 1,
         "dependencies.shared-files": 2,
-        "renderer.mermaid": 1,
         "renderer.mathjax": 1,
     }
 )
@@ -63,7 +61,7 @@ def _site_packages() -> Path:
 
 
 def write_fixture(project: Path) -> Path:
-    """Create all six independently repairable diagnostic failures."""
+    """Create all five independently repairable diagnostic failures."""
     project.mkdir(parents=True)
     config = project / "zensical.toml"
     _write(
@@ -81,10 +79,6 @@ extra_javascript = [
 
 [project.markdown_extensions.pymdownx.arithmatex]
 
-[project.markdown_extensions.pymdownx.superfences]
-custom_fences = [
-  { name = "mermaid", class = "mermaid", format = "pymdownx.superfences.fence_code_format" },
-]
 """,
     )
     _write(
@@ -95,11 +89,6 @@ custom_fences = [
 See \\ref{target}.
 
 ## Target
-
-```mermaid
-graph LR
-  A --> B
-```
 
 \\[ x^2 + y^2 = z^2 \\]
 """,
@@ -124,8 +113,8 @@ target = "docs/stylesheets/pdk-pdf.css"
     _write(project / "docs" / "stylesheets" / "pdk.css", "/* deliberately stale */\n")
 
     # The configured MathJax browser assets exist so configuration inspection
-    # is clean apart from the missing refs extension. Its Node inputs, and
-    # Mermaid's, are deliberately absent until the repair runs npm ci.
+    # is clean apart from the missing refs extension. Its Node inputs are
+    # deliberately absent until repair runs npm ci.
     _write(project / "docs" / "javascripts" / "mathjax.js", "// deliberately stale\n")
     _write(
         project / "docs" / "javascripts" / "vendor" / "mathjax" / "tex-svg-full.js",
@@ -242,7 +231,7 @@ def exercise(project: Path) -> dict[str, Any]:
             "fixture did not create every repairable diagnostic failure: " + ", ".join(missing)
         )
 
-    # This fixture deliberately creates these six project/environment failures.
+    # This fixture deliberately creates these five project/environment failures.
     # Limit the repair plan to them so an unrelated host-level finding (for
     # example Windows Pango discovery) is reported after the repair but is not
     # silently selected for a system mutation by this project-local harness.
